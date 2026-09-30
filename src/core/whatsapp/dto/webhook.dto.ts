@@ -141,7 +141,7 @@ class Contact {
   displayName: string;
 
   @ApiProperty({
-    example: 'BEGIN:VCARD\nVERSION:3.0\nN:Pináculo;',
+    example: 'BEGIN:VCARD\nVERSION:3.0\nN:AutoPilot;',
   })
   @IsString()
   @IsNotEmpty()

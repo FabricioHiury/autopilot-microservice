@@ -2,7 +2,6 @@
   "name": "autopilot-micro",
   "version": "0.0.1",
   "description": "Omnichannel Integrations Microservice for AutoPilot CRM",
-  "author": "Pináculo Digital",
   "private": true,
   "license": "UNLICENSED",
   "scripts": {

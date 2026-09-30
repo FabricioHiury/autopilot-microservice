@@ -1,132 +1,159 @@
-<p align="center">
-  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="200" alt="Nest Logo" /></a>
-</p>
+# AutoPilot CRM - Microsserviço de Integrações Omnichannel
 
-[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
-[circleci-url]: https://circleci.com/gh/nestjs/nest
+Microsserviço responsável por toda a camada de integração com canais de atendimento e portais de anúncios do AutoPilot CRM. Gerencia a comunicação bidirecional com WhatsApp, Instagram, Facebook, OLX e outros canais, recebendo leads/mensagens e enviando respostas em tempo real. Construído com NestJS, Prisma e Bull (filas).
 
-  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
-    <p align="center">
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
-<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
-<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
-<a href="https://coveralls.io/github/nestjs/nest?branch=master" target="_blank"><img src="https://coveralls.io/repos/github/nestjs/nest/badge.svg?branch=master#9" alt="Coverage" /></a>
-<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
-<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
-<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
-  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg"/></a>
-    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
-  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow"></a>
-</p>
-  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
-  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
+## Sobre o Projeto
 
-## Description
+O AutoPilot é um CRM omnichannel especializado no mercado automotivo. Este repositório é o microsserviço de integrações que abstrai as APIs específicas de cada provedor e expõe endpoints unificados para o backend principal. Principais responsabilidades:
 
-[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
+### Canais Integrados
 
-## Installation
+- **WhatsApp (não oficial)**: Integração via `whatsapp-web.js` + Puppeteer com Chromium. Suporta múltiplos dispositivos/sessões, envio/recebimento de mensagens, mídia, QR code para pareamento, status online/offline. Usa filas (Bull) para controle de envio e renovação de tokens.
+- **WhatsApp Oficial (Cloud API)**: Integração com WhatsApp Business Platform (Meta). Templates de mensagem HSM, envio de notificações transacionais, webhooks oficiais.
+- **Instagram (Meta)**: Integração com Instagram Messaging via Graph API. Recebimento/envio de DMs, stories, webhooks, origem da mensagem (story, post, anúncio, DM direta).
+- **Facebook (Meta)**: Integração com Facebook Messenger e leads de anúncios (Lead Ads). Recebimento/envio de mensagens do Messenger, captura automática de leads de campanhas.
+- **OLX**: Integração com portal OLX (autoupload, leads e chat). OAuth flow, chat direto com compradores, recebimento de leads de anúncios, envio de mensagens, renovação de tokens via cron.
+- **Comunicação genérica**: Módulo de comunicação unificado para listar e enviar mensagens entre canais.
+
+### Funcionalidades Complementares
+- **Webhooks unificados**: Recebe callbacks de todos os provedores e roteia para os devidos módulos
+- **Status de integrações**: Centraliza e monitora o status (conectado, desconectado, vencido, não configurado) de todas as integrações por loja
+- **Saúde do sistema**: Health check com Redis e dependências
+- **Autenticação API Key**: Endpoints protegidos por API Key para comunicação interna com o backend
+- **Armazenamento**: Upload de arquivos/mídias via S3 ou GCS
+- **Processamento de imagens/OCR**: Tesseract.js para reconhecimento óptico
+- **Manipulação de arquivos**: FFmpeg para conversão de mídia, arquivers ZIP
+- **Filas assíncronas**: Bull + Redis para envio de mensagens, renovação de tokens e tarefas agendadas
+
+## Stack Tecnológica
+
+- **Framework**: NestJS 10 (Node.js)
+- **ORM**: Prisma 5
+- **Banco de Dados**: PostgreSQL
+- **Cache/Filas**: Redis + Bull
+- **WhatsApp Web**: whatsapp-web.js + Puppeteer 24 + Chromium
+- **Raspagem/Automação**: Puppeteer (OLX e WhatsApp não oficial)
+- **OCR**: Tesseract.js
+- **Mídia**: ffmpeg-static
+- **HTTP**: Axios + axios-retry
+- **Armazenamento**: AWS S3 / Google Cloud Storage
+- **Autenticação**: JWT, API Key (guarda interna)
+- **Outros**: Firebase Admin, QR Code terminal/web, Schedule (cron jobs)
+- **Containerização**: Docker + supervisord (gerencia Chromium em background)
+- **Deploy**: Kubernetes (k8s/)
+
+## Pré-requisitos
+
+- Node.js 18+
+- PostgreSQL
+- Redis
+- **Chromium** (obrigatório para WhatsApp Web e OLX)
+- pnpm ou npm
+- Puppeteer devidamente configurado (Chromium)
+
+## Instalação
 
 ```bash
-$ npm install
+# PULA_DOWNLOAD_CHROMIUM caso tenha instalado globalmente
+export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
+export PUPPETEER_EXECUTABLE_PATH=$(which chromium)
+
+pnpm install
 ```
 
-## Running the app
+## Configuração
+
+Copie o arquivo `.env.example` para `.env` e preencha:
 
 ```bash
-# development
-$ npm run start
-
-# watch mode
-$ npm run start:dev
-
-# production mode
-$ npm run start:prod
+cp .env.example .env
 ```
 
-## Test
+Variáveis principais:
+- `DATABASE_URL`: PostgreSQL
+- `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`: Redis (para Bull e cache)
+- `API_KEY`: Chave de comunicação com backend principal
+- `PUPPETEER_EXECUTABLE_PATH`: Caminho do Chromium
+- `META_*`: App ID/Secret do Meta Business (Instagram/Facebook/WhatsApp Oficial)
+- `OLX_CLIENT_ID`, `OLX_CLIENT_SECRET`: Credenciais OLX OAuth
+- `WHATSAPP_OFFICIAL_*`: Credenciais WhatsApp Cloud API
+- `AWS_S3_*` ou `GCS_*`: Armazenamento de arquivos
+- `FIREBASE_*`: Configurações Firebase
+
+Execute as migrações:
 
 ```bash
-# unit tests
-$ npm run test
-
-# e2e tests
-$ npm run test:e2e
-
-# test coverage
-$ npm run test:cov
+pnpm prisma migrate dev
 ```
 
-## Support
+## Execução
 
-Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
+```bash
+# Desenvolvimento com watch
+pnpm dev
 
-## Stay in touch
-
-- Author - [Kamil Myśliwiec](https://kamilmysliwiec.com)
-- Website - [https://nestjs.com](https://nestjs.com/)
-- Twitter - [@nestframework](https://twitter.com/nestframework)
-
-## License
-
-Nest is [MIT licensed](LICENSE).
-
-## Sending message
-
-```curl
-curl -X POST http://localhost:3003/gerador/enviar-mensagem -H "Content-Type: application/json" -d "{\"numero\": \"553497078196\", \"mensagem\": \"test\"}"
+# Produção
+pnpm start:prod
 ```
 
-## Chat Info
+Serviço: `http://localhost:3003` (padrão)
+Swagger: `/api` ou `/reference`
+Health check: `/health`
 
-```
-curl --request GET --url "http://localhost:3003/wpp/chat-info?tokenDispositivo=722124a1-554c-493c-a993-a102c25bb9ea&numero=553497078196&numeroMensagens=10" --header "Content-Type: application/json" --header "x-api-key: l8KUiUixbmgfbrKGAyTVunkRMdkRl7_T_Zi4ktTiR-k"
-```
+## Docker
 
-## Pegando mensagens
+O Dockerfile já configura Chromium e usa `supervisord` para manter os processos:
 
-```
-curl --request GET --url "http://localhost:3003/wpp/chat-msgs?tokenDispositivo=722124a1-554c-493c-a993-a102c25bb9ea&numero=5561936180795&numeroMensagens=10&de=1700000000&ate=1700005000" --header "Content-Type: application/json" --header "x-api-key: l8KUiUixbmgfbrKGAyTVunkRMdkRl7_T_Zi4ktTiR-k"
-```
-
-```
-curl -X GET "http://localhost:3003/consumidor/chat-msgs?numero=553497078196&numeroMensagens=10" -H "accept: application/json"
+```bash
+docker-compose up -d
 ```
 
-## Todos os chats
+## Kubernetes
 
-```
-curl -X GET "http://localhost:3003/wpp/todos-chats?tokenDispositivo=722124a1-554c-493c-a993-a102c25bb9ea" -H "accept: application/json" -H "x-api-key: l8KUiUixbmgfbrKGAyTVunkRMdkRl7_T_Zi4ktTiR-k"
-```
+Manifestos em `k8s/`:
+- `statefulset.yaml`: StatefulSet (necessário para sessões persistentes do WhatsApp)
+- `service.yaml`: Service interno
+- `ingress.yaml`: Ingress para webhooks públicos
 
-## Insights
+## Testes
 
-1. Salvar dispositivo
-2. Salvar contatos (isGroup === false)
-3. Filtrar novos contatos.
-4. Banco pra persistir todas as mensagens de um contato.
+```bash
+# Unitários
+pnpm test
 
-5. Filtro data inicial, data final
-6. Conteúdo das mensagens
+# E2E
+pnpm test:e2e
 
-## Todo
-
-1. Endpoint de validação externa OLX
-2. Redirecionamento
-
-## Fluxo autenticação OLX
-
-1. Endpoint pra solicitar URL redirecionamento, considerar id do usuário e id da loja e o `client_id`
-
-```
-https://auth.olx.com.br/oauth?client_id=​1055d3e698d289f2af8663725127bd4b&redirect_uri=https://yourserver.com/token&response_type=code&scope=autoupload&state=/profile
+# Cobertura
+pnpm test:cov
 ```
 
-https://yourserver.com/:userId/token
+## Estrutura Principal
 
-Cookie
+```
+src/
+├── base/                          # Módulos base compartilhados
+│   ├── config/firebase.config.ts
+│   ├── guard/api-key.guard.ts
+│   ├── queues/token-renewal.queue.ts
+│   └── service/                    # Prisma, Redis, Firebase, Arquivos, Rate Limit
+├── core/
+│   ├── comunication/              # API unificada de comunicação
+│   ├── whatsapp/                  # WhatsApp Não Oficial (wpp-web + Puppeteer)
+│   │   └── services/message-queue.service.ts
+│   ├── whatsapp-official/         # WhatsApp Cloud API + Templates
+│   ├── instagram/                 # Instagram Messaging (Meta Graph API) + cron
+│   ├── facebook/                  # Facebook Messenger + Lead Ads
+│   ├── olx/                       # OLX (OAuth, leads, chat)
+│   ├── integrations/              # Status centralizado das integrações
+│   └── health-check/              # Health check
+└── prisma/                        # Schema e migrações
+```
 
+## Fluxo de Mensagens
 
-2. Endpoint pro callback da autenticação (verificar parâmetros a serem armazenados), no parâmetro de redirecionamento, deverá ser passado o endereço da api. Salvar em memória o código de acesso `code`.
-3. Enviar para api olx requisição para troca do code pelo access token (bearer). Informar no redirecionamento a url da própria api. Ao receber o callback, salvar o access token no banco de dados
+1. Mensagem chega via **webhook** do provedor (Meta, OLX) ou polling (WhatsApp Web)
+2. Microsserviço normaliza o payload para o formato comum do CRM
+3. Dispara evento HTTP para o backend principal (`autopilot-backend`) processar no módulo de Chat/Atendimento
+4. Respostas do atendente chegam do backend via API Key protegida
+5. Microsserviço enfileira (Bull) e envia pelo canal correspondente
