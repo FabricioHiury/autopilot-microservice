@@ -1,121 +1,322 @@
-# AutoPilot CRM - Microsserviço de Integrações Omnichannel
+# AutoPilot CRM - Microsserviço Gateway Omnichannel
 
-Microsserviço responsável por toda a camada de integração com canais de atendimento e portais de anúncios do AutoPilot CRM. Gerencia a comunicação bidirecional com WhatsApp, Instagram, Facebook, OLX e outros canais, recebendo leads/mensagens e enviando respostas em tempo real. Construído com NestJS, Prisma e Bull (filas).
+> **Projeto**: autopilot-microservice (Gateway Único de Integrações Omnichannel)  
+> **Backend Principal Relacionado**: `autopilot-backend`  
+> **Status**: Arquitetura Consolidada & Stateless  
+> **Porta**: `3005`
 
-## Sobre o Projeto
+Microsserviço responsável por toda a camada de borda para comunicação externa do AutoPilot CRM. O `autopilot-backend` **não** conversa diretamente com APIs de terceiros (Meta, Evolution API, OLX); todas as conexões são delegadas a este gateway, que normaliza eventos e DTOs para o CRM.
 
-O AutoPilot é um CRM omnichannel especializado no mercado automotivo. Este repositório é o microsserviço de integrações que abstrai as APIs específicas de cada provedor e expõe endpoints unificados para o backend principal. Principais responsabilidades:
+---
 
-### Canais Integrados
+## 🏗️ Principais Pilares Arquiteturais
 
-- **WhatsApp (não oficial)**: Integração via `whatsapp-web.js` + Puppeteer com Chromium. Suporta múltiplos dispositivos/sessões, envio/recebimento de mensagens, mídia, QR code para pareamento, status online/offline. Usa filas (Bull) para controle de envio e renovação de tokens.
-- **WhatsApp Oficial (Cloud API)**: Integração com WhatsApp Business Platform (Meta). Templates de mensagem HSM, envio de notificações transacionais, webhooks oficiais.
-- **Instagram (Meta)**: Integração com Instagram Messaging via Graph API. Recebimento/envio de DMs, stories, webhooks, origem da mensagem (story, post, anúncio, DM direta).
-- **Facebook (Meta)**: Integração com Facebook Messenger e leads de anúncios (Lead Ads). Recebimento/envio de mensagens do Messenger, captura automática de leads de campanhas.
-- **OLX**: Integração com portal OLX (autoupload, leads e chat). OAuth flow, chat direto com compradores, recebimento de leads de anúncios, envio de mensagens, renovação de tokens via cron.
-- **Comunicação genérica**: Módulo de comunicação unificado para listar e enviar mensagens entre canais.
+1. **Gateway Único Omnichannel** — Evolution API v2 (Baileys), WhatsApp Business API Oficial, Instagram Graph API, Facebook Messenger API, OLX Chat & Leads.
+2. **Internacionalização Total** — Código, DTOs e Endpoints 100% em Inglês Padronizado.
+3. **Sanitização Extrema** — Substituição de Chromium/Puppeteer/whatsapp-web.js pela **Evolution API v2 (Baileys)** em container dedicado, reduzindo o peso e a volatilidade do runtime.
+4. **Tratamento Híbrido de Áudio** — Evolution API nativa para WhatsApp não-oficial + FFmpeg nativo do Alpine para Meta Cloud API.
+5. **Isolamento de Banco de Dados (Database-per-Service)** — Banco `autopilot_micro` separado do CRM Core, particionado por `storeId`.
+6. **Stateless & Kubernetes-Ready** — Transição de `StatefulSet` ➔ `Deployment` padrão, habilitando HPA (Horizontal Pod Autoscaler) e rolling deploys sem PVCs.
+7. **Enriquecimento Estratégico do AutoPilot IA** — Extração de `externalAdId`, dados de veículo e referência de campanhas para alimentar o Dossiê do Lead.
 
-### Funcionalidades Complementares
-- **Webhooks unificados**: Recebe callbacks de todos os provedores e roteia para os devidos módulos
-- **Status de integrações**: Centraliza e monitora o status (conectado, desconectado, vencido, não configurado) de todas as integrações por loja
-- **Saúde do sistema**: Health check com Redis e dependências
-- **Autenticação API Key**: Endpoints protegidos por API Key para comunicação interna com o backend
-- **Armazenamento**: Upload de arquivos/mídias via S3 ou GCS
-- **Processamento de imagens/OCR**: Tesseract.js para reconhecimento óptico
-- **Manipulação de arquivos**: FFmpeg para conversão de mídia, arquivers ZIP
-- **Filas assíncronas**: Bull + Redis para envio de mensagens, renovação de tokens e tarefas agendadas
+---
 
-## Stack Tecnológica
+## 🌐 Arquitetura Consolidada: Gateway Único de Integrações
 
-- **Framework**: NestJS 10 (Node.js)
-- **ORM**: Prisma 5
-- **Banco de Dados**: PostgreSQL
-- **Cache/Filas**: Redis + Bull
-- **WhatsApp Web**: whatsapp-web.js + Puppeteer 24 + Chromium
-- **Raspagem/Automação**: Puppeteer (OLX e WhatsApp não oficial)
-- **OCR**: Tesseract.js
-- **Mídia**: ffmpeg-static
-- **HTTP**: Axios + axios-retry
-- **Armazenamento**: AWS S3 / Google Cloud Storage
-- **Autenticação**: JWT, API Key (guarda interna)
-- **Outros**: Firebase Admin, QR Code terminal/web, Schedule (cron jobs)
-- **Containerização**: Docker + supervisord (gerencia Chromium em background)
-- **Deploy**: Kubernetes (k8s/)
+```mermaid
+graph TD
+    subgraph "External Providers & APIs"
+        WPP_EVO[Evolution API v2 Container / Baileys]
+        WPP_OFF[Meta Cloud API / WABA]
+        INSTA[Instagram Graph API]
+        FB[Facebook Messenger API]
+        OLX[OLX Chat & Leads API]
+    end
 
-## Pré-requisitos
+    subgraph "autopilot-microservice (Port 3005 - Stateless Omnichannel Gateway)"
+        EVO_MOD[Evolution API Service]
+        WPP_OFF_MOD[WhatsApp Official Service]
+        INSTA_MOD[Instagram Service]
+        FB_MOD[Facebook Service]
+        OLX_MOD[OLX Service]
+        COMM_HUB[Communication Hub & Normalizer]
+        MICRO_DB[(autopilot_micro DB / Isolated)]
+    end
+
+    subgraph "autopilot-backend (Port 3000 - Core CRM Boilerplate)"
+        CORE_API[NestJS Core API - English Standards]
+        AI_SVC[AutoPilot AI Service - Dossier & 1-Click]
+        CORE_DB[(autopilot_main DB / Isolated)]
+    end
+
+    WPP_EVO <-->|HTTP REST & Webhooks| EVO_MOD
+    WPP_OFF <--> WPP_OFF_MOD
+    INSTA <--> INSTA_MOD
+    FB <--> FB_MOD
+    OLX <--> OLX_MOD
+
+    EVO_MOD --> COMM_HUB
+    WPP_OFF_MOD --> COMM_HUB
+    INSTA_MOD --> COMM_HUB
+    FB_MOD --> COMM_HUB
+    OLX_MOD --> COMM_HUB
+
+    COMM_HUB --> MICRO_DB
+
+    COMM_HUB -->|POST /chat/messages/incoming| CORE_API
+    COMM_HUB -->|POST /leads/incoming| CORE_API
+    COMM_HUB -->|POST /chat/messages/ack| CORE_API
+    CORE_API -->|POST /communication/messages| COMM_HUB
+    CORE_API --> AI_SVC
+    CORE_API --> CORE_DB
+```
+
+---
+
+## 🗄️ Estratégia de Banco de Dados: Database-per-Service
+
+Por que bancos separados?
+
+1. **Desacoplamento de Ciclo de Vida e Migrações** — O `autopilot-backend` passa por migrações frequentes de regras de negócio (User, Role, Customer, Deal, StoreCustomization). O microsserviço cuida apenas de dados de autenticação e sessões (WhatsAppAuthData, InstagramAuthData, etc.). Bases separadas impedem que uma migração do CRM bloqueie a mensageria.
+2. **Resiliência e I/O** — Mensageria opera sob rajadas de webhooks; com banco isolado, locks de escrita no CRM não travam atualizações de status do WhatsApp.
+3. **Multi-Tenancy Simplificado** — O microsserviço particiona dados apenas por `storeId` (UUID), sem precisar saber nada sobre regras visuais, slugs ou permissões.
+4. **Infraestrutura Otimizada** — Ambos utilizam o mesmo cluster PostgreSQL, mas em bases/schemas dedicados (`autopilot_main` e `autopilot_micro`).
+
+---
+
+## 📋 Canais e Funcionalidades
+
+### WhatsApp Não-Oficial (Evolution API v2 / Baileys)
+- Criação dinâmica de instâncias por `storeId`.
+- QR code base64 com renovação automática via webhook `QRCODE_UPDATED`.
+- Envio e recebimento de texto, mídia (imagem/vídeo/documento) e notas de voz (PTT).
+- Webhook de eventos: `MESSAGES_UPSERT`, `CONNECTION_UPDATE`, `QRCODE_UPDATED`.
+- Sem Chromium, sem Puppeteer, sem locks de disco — tudo delegado ao container da Evolution API.
+
+### WhatsApp Oficial (Meta Cloud API / WABA)
+- Templates HSM, notificações transacionais.
+- Conversão de áudio para `audio/ogg; codecs=opus` via **FFmpeg nativo do Alpine**.
+- Webhooks oficiais de entrada e status.
+
+### Instagram (Meta Graph API)
+- Recebimento/envio de DMs diretas.
+- Origem da mensagem (story, post, anúncio, DM direta).
+- Captura de `ad_id` / `referral` em campanhas Click-to-Chat para alimentar o AutoPilot IA (`metadata.externalAdId`).
+
+### Facebook (Meta)
+- Facebook Messenger.
+- Leads de campanhas Lead Ads.
+- Enriquecimento de metadados de anúncio.
+
+### OLX
+- OAuth flow completo.
+- Chat direto com compradores.
+- Recebimento automático de leads de anúncios (inclui `externalAdId` = `listId`, título e valor).
+- Renovação automática de tokens via cron.
+
+### Communication Hub (Normalização)
+- Todos os canais entram em um formato unificado: `IncomingMessageEventDto`.
+- Contratos bilaterais padronizados com o `autopilot-backend`.
+
+---
+
+## 🛠️ Stack Tecnológica
+
+| Categoria | Tecnologia |
+| :--- | :--- |
+| **Framework** | NestJS 10 (Node.js 20) |
+| **ORM** | Prisma 5 |
+| **Banco de Dados** | PostgreSQL 15 (`autopilot_micro`) |
+| **Cache / Filas** | Redis + Bull |
+| **HTTP** | Axios + axios-retry |
+| **Autenticação** | API Key (`x-micro-token` / `x-api-key`) + JWT |
+| **Agendamento** | @nestjs/schedule (renovação de tokens) |
+| **Validação** | class-validator + class-transformer |
+| **Containerização** | Node:20-alpine + FFmpeg nativo (apk) |
+| **Deploy** | Kubernetes (Deployment padrão, HPA, Ingress) |
+
+---
+
+## ✅ Pré-requisitos
 
 - Node.js 18+
-- PostgreSQL
-- Redis
-- **Chromium** (obrigatório para WhatsApp Web e OLX)
+- PostgreSQL 15+ (banco `autopilot_micro` separado)
+- Redis 7+
 - pnpm ou npm
-- Puppeteer devidamente configurado (Chromium)
+- **Container Evolution API v2** rodando (atendai/evolution-api:v2.1.1)
+- Meta Business configurado (se usar Instagram / Facebook / WhatsApp Oficial)
+- Credenciais OLX OAuth (se usar OLX)
 
-## Instalação
+---
+
+## 🚀 Instalação
 
 ```bash
-# PULA_DOWNLOAD_CHROMIUM caso tenha instalado globalmente
-export PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true
-export PUPPETEER_EXECUTABLE_PATH=$(which chromium)
-
 pnpm install
 ```
 
-## Configuração
+> ⚠️ **Não há mais necessidade** de `PUPPETEER_SKIP_CHROMIUM_DOWNLOAD` ou Chromium local. Todo o WhatsApp não-oficial roda via container da Evolution API.
 
-Copie o arquivo `.env.example` para `.env` e preencha:
+---
+
+## ⚙️ Configuração
+
+Copie o arquivo `.env.example` para `.env`:
 
 ```bash
 cp .env.example .env
 ```
 
-Variáveis principais:
-- `DATABASE_URL`: PostgreSQL
-- `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`: Redis (para Bull e cache)
-- `API_KEY`: Chave de comunicação com backend principal
-- `PUPPETEER_EXECUTABLE_PATH`: Caminho do Chromium
-- `META_*`: App ID/Secret do Meta Business (Instagram/Facebook/WhatsApp Oficial)
-- `OLX_CLIENT_ID`, `OLX_CLIENT_SECRET`: Credenciais OLX OAuth
-- `WHATSAPP_OFFICIAL_*`: Credenciais WhatsApp Cloud API
-- `AWS_S3_*` ou `GCS_*`: Armazenamento de arquivos
-- `FIREBASE_*`: Configurações Firebase
+### Variáveis Principais
 
-Execute as migrações:
+| Variável | Descrição |
+| :--- | :--- |
+| `DATABASE_URL` | Conexão PostgreSQL do microsserviço (ex: `postgresql://user:pass@localhost:5433/autopilot_micro`) |
+| `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD` | Conexão Redis (Bull + cache) |
+| `API_KEY` | Chave para comunicação interna com o `autopilot-backend` |
+| `AUTOPILOT_URL` | URL do backend principal (ex: `http://localhost:3000`) |
+| `APP_BASE_URL` | URL pública/privada deste microsserviço (para webhooks da Evolution) |
+| `EVOLUTION_API_URL` | URL do container da Evolution API (ex: `http://localhost:8080`) |
+| `EVOLUTION_API_KEY` | API Key global da Evolution API |
+| `META_*` | App ID/Secret do Meta Business (Instagram/Facebook/WhatsApp Oficial) |
+| `OLX_CLIENT_ID`, `OLX_CLIENT_SECRET` | Credenciais OLX OAuth |
+| `WHATSAPP_OFFICIAL_*` | Credenciais WhatsApp Cloud API (WABA) |
+| `FFMPEG_PATH` | Opcional. Padrão: `ffmpeg` (binário Alpine nativo) |
+
+### Executar Migrações
 
 ```bash
 pnpm prisma migrate dev
 ```
 
-## Execução
+---
+
+## 🏃 Execução
 
 ```bash
 # Desenvolvimento com watch
 pnpm dev
 
+# Build de produção
+pnpm build
+
 # Produção
 pnpm start:prod
 ```
 
-Serviço: `http://localhost:3003` (padrão)
-Swagger: `/api` ou `/reference`
-Health check: `/health`
+- **API REST**: `http://localhost:3005`
+- **Swagger**: `/api` ou `/reference`
+- **Health Check**: `/health`
 
-## Docker
+---
 
-O Dockerfile já configura Chromium e usa `supervisord` para manter os processos:
+## 🐳 Docker Compose (Ambiente de Desenvolvimento)
 
-```bash
-docker-compose up -d
+```yaml
+version: '3.8'
+
+services:
+  autopilot-micro:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "3005:3005"
+    env_file:
+      - .env
+    depends_on:
+      - postgres
+      - redis
+      - evolution-api
+
+  evolution-api:
+    image: atendai/evolution-api:v2.1.1
+    container_name: evolution_api
+    restart: always
+    ports:
+      - "8080:8080"
+    environment:
+      - SERVER_URL=http://localhost:8080
+      - AUTHENTICATION_API_KEY=${EVOLUTION_API_KEY}
+      - DATABASE_ENABLED=true
+      - DATABASE_PROVIDER=postgresql
+      - DATABASE_CONNECTION_URI=postgresql://${DB_USER}:${DB_PASSWORD}@postgres:5432/${DB_NAME}
+      - REDIS_ENABLED=true
+      - REDIS_URI=redis://redis:6379
+      - WEBHOOK_GLOBAL_ENABLED=true
+      - WEBHOOK_GLOBAL_URL=http://autopilot-micro:3005/whatsapp/webhook/evolution
+      - WEBHOOK_EVENTS_MESSAGES_UPSERT=true
+      - WEBHOOK_EVENTS_CONNECTION_UPDATE=true
+      - WEBHOOK_EVENTS_QRCODE_UPDATED=true
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_USER: ${DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${DB_NAME:-autopilot_micro}
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+
+volumes:
+  postgres_data:
 ```
 
-## Kubernetes
+### Dockerfile Ultra-Leve (Node 20 Alpine, ~180MB)
+
+```dockerfile
+FROM node:20-alpine AS builder
+WORKDIR /app
+COPY package*.json ./
+COPY prisma ./prisma/
+RUN npm ci
+COPY . .
+RUN npx prisma generate && npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+# FFmpeg nativo do Alpine para a Meta Cloud API (áudio opus/ogg)
+RUN apk add --no-cache ffmpeg dumb-init
+ENV NODE_ENV=production
+COPY package*.json ./
+RUN npm ci --only=production && npm cache clean --force
+COPY --from=builder /app/dist ./dist
+COPY --from=builder /app/prisma ./prisma
+COPY --from=builder /app/node_modules/.prisma ./node_modules/.prisma
+EXPOSE 3005
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["node", "dist/main.js"]
+```
+
+---
+
+## ☸️ Kubernetes (Stateless Deployment)
+
+O microsserviço não possui mais estado em disco local (sem `.wwebjs_auth`). O manifesto é convertido de `StatefulSet` para `Deployment` padrão:
+
+- Elimina PersistentVolumeClaims (PVCs).
+- Permite réplicas com deploy rolling sem downtime.
+- Habilita `HorizontalPodAutoscaler` (HPA) baseado em CPU/memória para absorver picos de webhooks.
 
 Manifestos em `k8s/`:
-- `statefulset.yaml`: StatefulSet (necessário para sessões persistentes do WhatsApp)
-- `service.yaml`: Service interno
-- `ingress.yaml`: Ingress para webhooks públicos
+- `deployment.yaml` — Deployment stateless + probes.
+- `service.yaml` — Service interno.
+- `ingress.yaml` — Ingress para webhooks públicos.
+- `hpa.yaml` — Auto Scaling.
 
-## Testes
+---
+
+## 🧪 Testes
 
 ```bash
 # Unitários
@@ -128,32 +329,108 @@ pnpm test:e2e
 pnpm test:cov
 ```
 
-## Estrutura Principal
+---
+
+## 📂 Estrutura de Diretórios (Inglês Padronizado)
 
 ```
 src/
-├── base/                          # Módulos base compartilhados
+├── base/                                # Módulos base compartilhados
 │   ├── config/firebase.config.ts
 │   ├── guard/api-key.guard.ts
 │   ├── queues/token-renewal.queue.ts
-│   └── service/                    # Prisma, Redis, Firebase, Arquivos, Rate Limit
+│   └── service/                          # Prisma, Redis, Arquivos, Rate Limit
 ├── core/
-│   ├── comunication/              # API unificada de comunicação
-│   ├── whatsapp/                  # WhatsApp Não Oficial (wpp-web + Puppeteer)
-│   │   └── services/message-queue.service.ts
-│   ├── whatsapp-official/         # WhatsApp Cloud API + Templates
-│   ├── instagram/                 # Instagram Messaging (Meta Graph API) + cron
-│   ├── facebook/                  # Facebook Messenger + Lead Ads
-│   ├── olx/                       # OLX (OAuth, leads, chat)
-│   ├── integrations/              # Status centralizado das integrações
-│   └── health-check/              # Health check
-└── prisma/                        # Schema e migrações
+│   ├── communication/                   # Hub unificado (ex: comunication com typo corrigido)
+│   │   ├── communication.controller.ts
+│   │   ├── communication.service.ts
+│   │   ├── dto/
+│   │   │   ├── send-message.dto.ts
+│   │   │   ├── incoming-message-event.dto.ts
+│   │   │   └── message-metadata.dto.ts
+│   │   └── axios.config.ts
+│   ├── whatsapp/                        # WhatsApp Não-Oficial via Evolution API v2
+│   │   ├── services/evolution-api.service.ts
+│   │   └── evolution-webhook.controller.ts
+│   ├── whatsapp-official/               # WhatsApp Cloud API + Templates HSM
+│   ├── instagram/                       # Instagram Messaging (Meta Graph API) + cron
+│   ├── facebook/                        # Facebook Messenger + Lead Ads
+│   ├── olx/                             # OLX (OAuth, leads, chat)
+│   ├── integrations/                    # Status centralizado das integrações
+│   └── health-check/
+└── prisma/                              # schema.prisma (autopilot_micro) + migrações
 ```
 
-## Fluxo de Mensagens
+---
 
-1. Mensagem chega via **webhook** do provedor (Meta, OLX) ou polling (WhatsApp Web)
-2. Microsserviço normaliza o payload para o formato comum do CRM
-3. Dispara evento HTTP para o backend principal (`autopilot-backend`) processar no módulo de Chat/Atendimento
-4. Respostas do atendente chegam do backend via API Key protegida
-5. Microsserviço enfileira (Bull) e envia pelo canal correspondente
+## 🔌 Contratos Bilaterais com o `autopilot-backend`
+
+### Rotas Expostas pelo Microsserviço (REST)
+
+| Método | Rota | Descrição |
+| :--- | :--- | :--- |
+| `POST` | `/communication/messages` | Envio de mensagem para canal externo |
+| `POST` | `/communication/whatsapp/verify-number` | Valida se número tem WhatsApp ativo |
+| `GET` | `/integrations/:storeId/status` | Status consolidado das integrações da loja |
+| `GET` | `/integrations/whatsapp/qrcode/:storeId` | QR Code da sessão Evolution API |
+| `DELETE` | `/integrations/:storeId` | Desconexão/remoção de conexões da loja |
+| `POST` | `/integrations/:storeId/:channel/clear-cache` | Limpeza de circuit-breaker e cache |
+
+### Webhooks Emitidos para o `autopilot-backend`
+
+| Método | Rota | Descrição |
+| :--- | :--- | :--- |
+| `POST` | `${AUTOPILOT_URL}/chat/messages/incoming` | Nova mensagem normalizada (qualquer canal) |
+| `POST` | `${AUTOPILOT_URL}/leads/incoming` | Novo lead externo normalizado (OLX/Campanhas Meta) |
+| `POST` | `${AUTOPILOT_URL}/chat/messages/ack` | Confirmação de envio/entrega/leitura |
+
+### DTOs Principais (Inglês)
+
+**`SendMessageDto`** (CRM → Canal)
+```typescript
+storeId, recipient, text?, attachmentUrl?, attachmentType?,
+quotedMessageId?, channel, messageId?, contacts?,
+isVoiceRecording?, wppApiType? ('official' | 'evolution')
+```
+
+**`IncomingMessageEventDto`** (Canal → CRM)
+```typescript
+storeId, text?, attachmentUrl?, attachmentType?, messageId?,
+quotedMessageId?, channel, isFromStore?,
+externalSenderId, timestamp, metadata? (MessageMetadataDto)
+```
+
+**`MessageMetadataDto`** (Enriquecimento AutoPilot IA)
+```typescript
+name, phone, email, avatarUrl,
+externalAdId,    // ← Chave para identificar veículo no Dossiê IA
+source, sourceDetails
+```
+
+---
+
+## 🤖 Enriquecimento de Dados para o AutoPilot IA
+
+- **OLX**: `externalAdId` contém o `listId` do anúncio; título e valor são incluídos em `metadata`.
+- **Instagram / Facebook**: `ad_id` / `referral` de campanhas Click-to-Chat são capturados e encaminhados em `metadata.externalAdId`, permitindo ao CRM identificar automaticamente o veículo em estoque.
+
+---
+
+## 🧹 Diferenças-chave em Relação ao Legado
+
+| Item | Antes (Legado) | Agora (Novo) |
+| :--- | :--- | :--- |
+| **WhatsApp não-oficial** | `whatsapp-web.js` + Puppeteer + Chromium local | Evolution API v2 (Baileys) em container dedicado |
+| **Runtime** | ~2GB imagem + Chromium + 6GB heap | ~180MB Alpine + FFmpeg nativo |
+| **Estado** | StatefulSet + PVC (sessões em disco) | Deployment stateless + Evolution API centraliza sessões |
+| **Áudio PTT** | `ffmpeg-static` (~50MB node_modules) | FFmpeg Alpine (`apk add`, ~5MB) |
+| **Linguagem código** | PT/EN misto, typo "comunication" | 100% EN, "communication" corrigido |
+| **Banco** | Compartilhado com CRM | Database-per-Service (`autopilot_micro`) |
+| **OCR** | Tesseract.js | Removido (descontinuado) |
+
+---
+
+## 🔗 Repositórios Relacionados
+
+- **[autopilot-backend](../autopilot-backend)** — Core CRM Multi-Tenant com WebSockets e AutoPilot IA.
+- **[autopilot-frontend](../autopilot-frontend)** — Frontend Next.js 14 com White-Label Dinâmico.
