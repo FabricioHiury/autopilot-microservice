@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: autopilot-micro
+  namespace: autopilot
+  labels:
+    app: autopilot-micro
+spec:
+  selector:
+    app: autopilot-micro
+  ports:
+    - name: http
+      port: 8080
+      targetPort: 8080
+  type: ClusterIP

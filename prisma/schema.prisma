@@ -1,0 +1,117 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model WhatsAppAuthData {
+  id         String   @id @default(uuid())
+  instanceId String   @unique
+  updatedAt  DateTime @updatedAt
+  createdAt  DateTime @default(now())
+  storeId    String   @unique
+  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([instanceId, storeId])
+  @@map("whatsapp_auth_data")
+}
+
+model OlxAuthData {
+  id               String    @id @default(uuid())
+  clientId         String
+  clientSecret     String
+  code             String?
+  receiveMessages  Boolean   @default(true)
+  accessToken      String?
+  uniqueId         String?   @unique
+  storeId          String    @unique
+  updatedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  leadWebhookToken String?
+  store            Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([clientId, storeId])
+  @@map("olx_auth_data")
+}
+
+model InstagramAuthData {
+  id                String    @id @default(uuid())
+  storeId           String    @unique
+  instagramAppId    String?   @unique
+  instagramGlobalId String?   @unique
+  uniqueId          String?   @unique
+  token             String?
+  tokenExpiry       DateTime?
+  updatedAt         DateTime?
+  createdAt         DateTime  @default(now())
+  scheduledRenewal  DateTime?
+  lastTokenRenewal  DateTime?
+  userToken         String?
+  store             Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([instagramAppId, storeId])
+  @@map("instagram_auth_data")
+}
+
+model FacebookAuthData {
+  id               String    @id @default(uuid())
+  storeId          String    @unique
+  uniqueId         String?   @unique
+  pageId           String?   @unique
+  facebookUserId   String?   @unique
+  userToken        String?
+  pageToken        String?
+  tokenExpiry      DateTime?
+  updatedAt        DateTime?
+  createdAt        DateTime  @default(now())
+  scheduledRenewal DateTime?
+  lastTokenRenewal DateTime?
+  store            Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([pageId, storeId])
+  @@map("facebook_auth_data")
+}
+
+model WhatsAppOfficialAuthData {
+  id            String   @id @default(uuid())
+  storeId       String   @unique
+  wabaId        String
+  phoneNumberId String
+  accessToken   String
+  verifyToken   String
+  businessPhone String
+  updatedAt     DateTime @updatedAt
+  createdAt     DateTime @default(now())
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@map("whatsapp_official_auth_data")
+}
+
+model Store {
+  id                       String                    @id @unique
+  facebookAuthData         FacebookAuthData?
+  instagramAuthData        InstagramAuthData?
+  olxAuthData              OlxAuthData?
+  requestDeletionData      RequestDeletionData[]
+  whatsAppAuthData         WhatsAppAuthData?
+  whatsAppOfficialAuthData WhatsAppOfficialAuthData?
+
+  @@map("store")
+}
+
+model RequestDeletionData {
+  id             String   @id @default(uuid())
+  code           String   @unique
+  storeId        String
+  externalUserId String?
+  channel        String
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  store          Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+
+  @@unique([code, storeId])
+  @@map("request_deletion_data")
+}

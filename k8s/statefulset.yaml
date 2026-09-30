@@ -1,0 +1,83 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: autopilot-micro
+  namespace: autopilot
+  labels:
+    app: autopilot-micro
+spec:
+  serviceName: autopilot-micro
+  replicas: 1
+  selector:
+    matchLabels:
+      app: autopilot-micro
+  template:
+    metadata:
+      labels:
+        app: autopilot-micro
+    spec:
+      imagePullSecrets:
+        - name: docker-hub-secret
+      containers:
+        - name: autopilot-micro
+          image: nadice/autopilot-micro:484d88ecfd96ea19201ed3260b9b3ab91f05b052
+          ports:
+            - containerPort: 8080
+              name: http
+          env:
+            - name: WPP_AUTH_STRATEGY
+              value: "local"
+            - name: WPP_SESSION_PATH
+              value: "/data/whatsapp-sessions"
+          envFrom:
+            - secretRef:
+                name: autopilot-micro-env
+          volumeMounts:
+            - name: whatsapp-sessions
+              mountPath: /data/whatsapp-sessions
+          resources:
+            requests:
+              cpu: 600m
+              memory: 1536Mi
+            limits:
+              cpu: 3000m
+              memory: 3Gi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 15
+            failureThreshold: 5
+            successThreshold: 1
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 10
+            failureThreshold: 4
+            successThreshold: 1
+      initContainers:
+        - name: fix-permissions
+          image: busybox:latest
+          command: ['sh', '-c', 'mkdir -p /data/whatsapp-sessions && chmod -R 777 /data/whatsapp-sessions']
+          volumeMounts:
+            - name: whatsapp-sessions
+              mountPath: /data/whatsapp-sessions
+  volumeClaimTemplates:
+    - metadata:
+        name: whatsapp-sessions
+        labels:
+          app: autopilot-micro
+      spec:
+        accessModes: 
+          - ReadWriteOnce
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 30Gi
+
+
