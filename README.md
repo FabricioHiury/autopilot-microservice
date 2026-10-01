@@ -432,5 +432,5 @@ source, sourceDetails
 
 ## 🔗 Repositórios Relacionados
 
-- **[autopilot-backend](../autopilot-backend)** — Core CRM Multi-Tenant com WebSockets e AutoPilot IA.
-- **[autopilot-frontend](../autopilot-frontend)** — Frontend Next.js 14 com White-Label Dinâmico.
+- **[autopilot-backend](https://github.com/FabricioHiury/autopilot-backend)** — Core CRM Multi-Tenant com WebSockets e AutoPilot IA.
+- **[autopilot-frontend](https://github.com/FabricioHiury/autopilot-frontend)** — Frontend Next.js 14 com White-Label Dinâmico.
