@@ -1,4 +1,16 @@
-import { Body, Controller, Get, Headers, Post, Query, RawBodyRequest, Req, Res } from '@nestjs/common';
+import { DurableQueueService } from '../delivery/durable-queue.service';
+import { verifyMetaSignature } from '../delivery/delivery.utils';
+import {
+  Body,
+  Controller,
+  Get,
+  Headers,
+  Post,
+  Query,
+  RawBodyRequest,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { InstagramService } from './instagram.service';
 import { ConfigureWebhooksDto } from './dto/configure-webhooks.dto';
 import { InstagramPayload } from './instagram.interfaces';
@@ -8,7 +20,20 @@ import { ApiExcludeController } from '@nestjs/swagger';
 @ApiExcludeController()
 @Controller('instagram/webhooks')
 export class InstagramController {
-  constructor(private readonly instagramService: InstagramService) { }
+  constructor(
+    private readonly instagramService: InstagramService,
+    private readonly queue: DurableQueueService,
+  ) {}
+  onModuleInit() {
+    this.queue.register('inbox', 'instagram', async (job) => {
+      const data = job.payload as any;
+      await this.instagramService.receiveMessage(
+        data.body,
+        data.signature,
+        Buffer.from(data.rawBody, 'base64'),
+      );
+    });
+  }
 
   @Get('/')
   configureWebhooks(@Query() query: ConfigureWebhooksDto) {
@@ -16,12 +41,25 @@ export class InstagramController {
   }
 
   @Post('/')
-  async receiveMessage(@Body() payload: InstagramPayload, @Headers() headers: Record<string, string | string[]>, @Res() res: Response, @Req() req: RawBodyRequest<Request>) {
+  async receiveMessage(
+    @Body() payload: InstagramPayload,
+    @Headers() headers: Record<string, string | string[]>,
+    @Res() res: Response,
+    @Req() req: RawBodyRequest<Request>,
+  ) {
     const body = (req as any).rawBody as Buffer | undefined;
     const h = headers || {};
-    const signature = (h['x-hub-signature-256'] as string) || (h['X-Hub-Signature-256'] as string) || (h['x-hub-signature'] as string) || (h['X-Hub-Signature'] as string);
+    const signature =
+      (h['x-hub-signature-256'] as string) ||
+      (h['X-Hub-Signature-256'] as string) ||
+      (h['x-hub-signature'] as string) ||
+      (h['X-Hub-Signature'] as string);
 
-    await this.instagramService.receiveMessage(payload, signature as string, body as any);
+    verifyMetaSignature(body, signature, process.env.INSTAGRAM_APP_SECRET);
+    await this.queue.acceptWebhook('instagram', payload, {
+      signature,
+      rawBody: body.toString('base64'),
+    });
     res.sendStatus(200);
   }
 
@@ -48,13 +86,19 @@ export class InstagramController {
   }
 
   @Post('/deauthenticate')
-  async removerPermissoes(@Body() body: { signed_request: string }, @Res() res: Response) {
+  async removePermissions(
+    @Body() body: { signed_request: string },
+    @Res() res: Response,
+  ) {
     await this.instagramService.removeStorePermissions(body.signed_request);
     res.sendStatus(200);
   }
 
   @Post('/delete')
-  async processarDelecaoDados(@Body() body: { signed_request: string }, @Res() res: Response) {
+  async processDataDeletion(
+    @Body() body: { signed_request: string },
+    @Res() res: Response,
+  ) {
     return await this.instagramService.deleteStoreData(body.signed_request);
   }
 

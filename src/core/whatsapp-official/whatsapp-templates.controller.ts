@@ -1,4 +1,15 @@
-import { Controller, Get, Post, Delete, Body, Query, HttpException, HttpStatus } from '@nestjs/common';
+import { UseGuards } from '@nestjs/common';
+import { ApiKeyGuard } from '../../base/guard/api-key.guard';
+import {
+  Controller,
+  Get,
+  Post,
+  Delete,
+  Body,
+  Query,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { WhatsappOfficialService } from './whatsapp-official.service';
 import {
@@ -10,18 +21,26 @@ import {
 } from './dto/templates.dto';
 
 @ApiTags('WhatsApp Templates')
+@UseGuards(ApiKeyGuard)
 @Controller('whatsapp-official/templates')
 export class WhatsappTemplatesController {
-  constructor(private readonly whatsappOfficialService: WhatsappOfficialService) {}
+  constructor(
+    private readonly whatsappOfficialService: WhatsappOfficialService,
+  ) {}
 
   @Get()
   @ApiOperation({ summary: 'List all message templates' })
   @ApiResponse({ status: 200, type: [TemplateResponseDto] })
   async getTemplates(@Query() query: GetTemplatesDto) {
-    const result = await this.whatsappOfficialService.getMessageTemplates(query.storeId);
+    const result = await this.whatsappOfficialService.getMessageTemplates(
+      query.storeId,
+    );
 
     if (!result.success) {
-      throw new HttpException(result.error || 'Failed to get templates', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        result.error || 'Failed to get templates',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     return { success: true, templates: result.templates };
@@ -31,15 +50,21 @@ export class WhatsappTemplatesController {
   @ApiOperation({ summary: 'Create a new message template' })
   @ApiResponse({ status: 201, type: TemplateResponseDto })
   async createTemplate(@Body() body: CreateTemplateDto) {
-    const result = await this.whatsappOfficialService.createMessageTemplate(body.storeId, {
-      name: body.name,
-      category: body.category,
-      language: body.language,
-      components: body.components,
-    });
+    const result = await this.whatsappOfficialService.createMessageTemplate(
+      body.storeId,
+      {
+        name: body.name,
+        category: body.category,
+        language: body.language,
+        components: body.components,
+      },
+    );
 
     if (!result.success) {
-      throw new HttpException(result.error || 'Failed to create template', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        result.error || 'Failed to create template',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     return { success: true, template: result.template };
@@ -48,10 +73,16 @@ export class WhatsappTemplatesController {
   @Delete()
   @ApiOperation({ summary: 'Delete a message template' })
   async deleteTemplate(@Query() query: DeleteTemplateDto) {
-    const result = await this.whatsappOfficialService.deleteMessageTemplate(query.storeId, query.name);
+    const result = await this.whatsappOfficialService.deleteMessageTemplate(
+      query.storeId,
+      query.name,
+    );
 
     if (!result.success) {
-      throw new HttpException(result.error || 'Failed to delete template', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        result.error || 'Failed to delete template',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     return { success: true };
@@ -65,14 +96,16 @@ export class WhatsappTemplatesController {
       body.to,
       body.templateName,
       body.languageCode,
-      body.components
+      body.components,
     );
 
     if (!result.success) {
-      throw new HttpException(result.error || 'Failed to send template message', HttpStatus.BAD_REQUEST);
+      throw new HttpException(
+        result.error || 'Failed to send template message',
+        HttpStatus.BAD_REQUEST,
+      );
     }
 
     return { success: true, messageId: result.messageId };
   }
 }
-

@@ -1,0 +1,11 @@
+.git
+node_modules
+dist
+coverage
+.env
+.env.*
+config/firebase.json
+.wwebjs_auth
+.wwebjs_cache
+*.log
+.DS_Store

@@ -1,21 +1,27 @@
-import { IsString, IsNotEmpty, IsOptional, IsEmail, IsObject } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsEmail,
+  IsObject,
+} from 'class-validator';
 
 export class OlxReceiveLeadDto {
   @IsString()
   @IsNotEmpty()
-  source: string; // 'OLX' ou 'WhatsApp'
+  source: string;
 
   @IsString()
   @IsOptional()
-  adId?: string; // id do anúncio no integrador
+  adId?: string;
 
   @IsString()
   @IsNotEmpty()
-  listId: string; // id do anúncio na OLX
+  listId: string;
 
   @IsString()
   @IsNotEmpty()
-  linkAd: string; // link do anúncio na OLX
+  linkAd: string;
 
   @IsString()
   @IsNotEmpty()
@@ -27,20 +33,20 @@ export class OlxReceiveLeadDto {
 
   @IsString()
   @IsOptional()
-  phone?: string; // pode vir com/sem DDD
+  phone?: string;
 
   @IsString()
   @IsOptional()
-  message?: string; // pode ser vazio quando é apenas interesse
+  message?: string;
 
   @IsNotEmpty()
-  createdAt: string; // ISO string
+  createdAt: string;
 
   @IsObject()
   @IsOptional()
-  adsInfo?: Record<string, any>; // detalhes adicionais (Autos)
+  adsInfo?: Record<string, any>;
 
   @IsString()
   @IsOptional()
-  externalId?: string; // identificador único do lead
+  externalId?: string;
 }

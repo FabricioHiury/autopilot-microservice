@@ -1,3 +1,5 @@
+import { ConfigModule } from '@nestjs/config';
+import { DeliveryModule } from './core/delivery/delivery.module';
 import { Module } from '@nestjs/common';
 import { CoreModule } from './core/core.module';
 import { EventEmitterModule } from '@nestjs/event-emitter';
@@ -8,13 +10,16 @@ import { BaseModule } from './base/base.module';
 
 @Module({
   imports: [
+    ConfigModule.forRoot({ isGlobal: true }),
     EventEmitterModule.forRoot(),
+    DeliveryModule,
     ScheduleModule.forRoot(),
     BullModule.forRoot({
       redis: {
         host: process.env.REDIS_HOST,
         port: parseInt(process.env.REDIS_PORT || '6379'),
         password: process.env.REDIS_PASSWORD,
+        username: process.env.REDIS_USERNAME || undefined,
         connectTimeout: 10000,
         maxRetriesPerRequest: 5,
         enableAutoPipelining: false,
@@ -28,7 +33,7 @@ import { BaseModule } from './base/base.module';
     }),
     HealthModule,
     BaseModule,
-    CoreModule
+    CoreModule,
   ],
 })
-export class AppModule { }
+export class AppModule {}

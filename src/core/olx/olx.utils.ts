@@ -1,4 +1,4 @@
-import { ErrorResponse } from 'src/base/exceptions/error.response.handler';
+import { ErrorResponse } from '../../base/exceptions/error.response.handler';
 
 type OAuthErrorCode =
   | 'invalid_request'
@@ -12,42 +12,50 @@ const ERROR_MAP = {
   invalid_request: {
     status: 400,
     message:
-      'Falta de parâmetro obrigatório na requisição, incluiu um parâmetro não suportado/repetido, múltiplas credenciais ou malformação da requisição.',
+      'Missing, unsupported or duplicated parameters, multiple credentials or malformed request.',
   },
   invalid_client: {
     status: 400,
-    message: 'Falha na autorização do cliente.',
+    message: 'Client authorization failed.',
   },
   invalid_grant: {
     status: 400,
     message:
-      'Código de autorização inválido, expirado ou revogado; URI diferente da usada na autorização; ou emitido para outro cliente.',
+      'Invalid, expired or revoked authorization code, mismatched redirect URI or wrong client.',
   },
   unauthorized_client: {
     status: 400,
-    message:
-      'O cliente autenticado não está autorizado a utilizar este tipo de autorização (grant_type).',
+    message: 'The client is not authorized to use this grant type.',
   },
   unsupported_grant_type: {
     status: 400,
-    message: 'O tipo de autorização (grant_type) não é suportado pelo servidor.',
+    message: 'The server does not support this grant type.',
   },
   invalid_scope: {
     status: 400,
-    message:
-      'A solicitação de escopo é inválida, desconhecida ou excede as permissões concedidas pelo usuário.',
+    message: 'Requested scope is invalid or exceeds granted permissions.',
   },
-} as const satisfies Readonly<Record<OAuthErrorCode, { status: number; message: string }>>;
+} as const satisfies Readonly<
+  Record<OAuthErrorCode, { status: number; message: string }>
+>;
 
 type HandleOpts = {
   context?: string;
   fallbackMessage?: string;
 };
 
-export function handleOlxAccessKeyErrors(errorCode: string, opts: HandleOpts = {}): never {
-  const code = (errorCode ?? '').toString().trim().toLowerCase() as OAuthErrorCode;
+export function handleOlxAccessKeyErrors(
+  errorCode: string,
+  opts: HandleOpts = {},
+): never {
+  const code = (errorCode ?? '')
+    .toString()
+    .trim()
+    .toLowerCase() as OAuthErrorCode;
 
-  const mapped = (ERROR_MAP as Readonly<Record<string, { status: number; message: string }>>)[code];
+  const mapped = (
+    ERROR_MAP as Readonly<Record<string, { status: number; message: string }>>
+  )[code];
   if (mapped) {
     throw new ErrorResponse(mapped.message, mapped.status);
   }
@@ -55,7 +63,7 @@ export function handleOlxAccessKeyErrors(errorCode: string, opts: HandleOpts = {
   const ctx = opts.context ? ` (${opts.context})` : '';
   const fallback =
     opts.fallbackMessage ??
-    'Erro ao obter chave de acesso. Tente novamente ou verifique as credenciais/configuração.';
+    'Failed to obtain access key. Check credentials and configuration.';
 
   throw new ErrorResponse(`${fallback}${ctx} [code="${errorCode}"]`, 502);
 }

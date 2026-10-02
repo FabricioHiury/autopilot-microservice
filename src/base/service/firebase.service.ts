@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as admin from 'firebase-admin';
-import { getFirebaseConfig } from 'src/base/config/firebase.config';
-import { ErrorResponse } from 'src/base/exceptions/error.response.handler';
+import { getFirebaseConfig } from '../config/firebase.config';
+import { ErrorResponse } from '../exceptions/error.response.handler';
 import { v4 as uuidv4 } from 'uuid';
 import { Bucket } from '@google-cloud/storage';
 
@@ -19,10 +19,15 @@ export class FirebaseService {
   private initializeFirebase() {
     try {
       const firebaseConfig = getFirebaseConfig();
-      const privateKey = (firebaseConfig.private_key || '').replace(/\\n/g, '\n');
+      const privateKey = (firebaseConfig.private_key || '').replace(
+        /\\n/g,
+        '\n',
+      );
 
-      const storageBucket = `${firebaseConfig.project_id}.firebasestorage.app`;
-      
+      const storageBucket =
+        process.env.FIREBASE_STORAGE_BUCKET ||
+        `${firebaseConfig.project_id}.firebasestorage.app`;
+
       if (admin.apps.length > 0) {
         this.firebaseApp = admin.apps[0] as admin.app.App;
         this.logger.log('Firebase already initialized, reusing existing app');
@@ -39,16 +44,19 @@ export class FirebaseService {
       }
 
       this.bucket = this.firebaseApp.storage().bucket();
-      this.logger.log(`Bucket initialized: ${this.bucket?.name || 'undefined'}`);
-      
+      this.logger.log(
+        `Bucket initialized: ${this.bucket?.name || 'undefined'}`,
+      );
+
       if (!this.bucket) {
         this.logger.error('Failed to initialize bucket - bucket is undefined');
       }
     } catch (error) {
-      this.logger.error('Error initializing Firebase:', error);
+      this.logger.warn(
+        'Firebase Storage is not configured; media processing will retry until credentials are provided',
+      );
     }
   }
-
 
   /**
    * Determine the folder based on file MIME type
@@ -70,10 +78,12 @@ export class FirebaseService {
       return 'Video';
     }
 
-    if (mime === 'application/pdf' ||
+    if (
+      mime === 'application/pdf' ||
       mime.startsWith('application/msword') ||
       mime.startsWith('application/vnd.openxmlformats-officedocument') ||
-      mime.startsWith('text/')) {
+      mime.startsWith('text/')
+    ) {
       return 'Documentos';
     }
 
@@ -122,23 +132,31 @@ export class FirebaseService {
    * @param path Exact storage path (e.g., "{instanceId}/profile/avatar.jpg")
    * @returns [key, url]
    */
-  async uploadBufferToPath(buffer: Buffer, contentType: string, path: string): Promise<[string, string]> {
+  async uploadBufferToPath(
+    buffer: Buffer,
+    contentType: string,
+    path: string,
+  ): Promise<[string, string]> {
     try {
-      this.logger.log(`[UPLOAD] Starting upload - path: ${path}, contentType: ${contentType}, bufferSize: ${buffer?.length || 0}`);
-      
+      this.logger.log(
+        `[UPLOAD] Starting upload - path: ${path}, contentType: ${contentType}, bufferSize: ${buffer?.length || 0}`,
+      );
+
       if (!this.bucket) {
         this.logger.error('[UPLOAD] Bucket is not initialized');
         throw new ErrorResponse('Firebase Storage not initialized', 500);
       }
 
       if (!buffer || !path) {
-        this.logger.error(`[UPLOAD] Invalid params - buffer: ${!!buffer}, path: ${path}`);
+        this.logger.error(
+          `[UPLOAD] Invalid params - buffer: ${!!buffer}, path: ${path}`,
+        );
         throw new ErrorResponse('Invalid upload parameters.', 400);
       }
 
       this.logger.log(`[UPLOAD] Creating file reference...`);
       const fileRef = this.bucket.file(path);
-      
+
       this.logger.log(`[UPLOAD] Saving file to bucket...`);
       await fileRef.save(buffer, {
         metadata: { contentType },
@@ -146,11 +164,13 @@ export class FirebaseService {
 
       this.logger.log(`[UPLOAD] File saved, generating URL...`);
       const url = await this.fileUrl(path);
-      
+
       this.logger.log(`[UPLOAD] Upload complete: ${url.substring(0, 100)}...`);
       return [path, url];
     } catch (error: any) {
-      this.logger.error(`[UPLOAD] Error uploading buffer to path: ${error?.message}`);
+      this.logger.error(
+        `[UPLOAD] Error uploading buffer to path: ${error?.message}`,
+      );
       this.logger.error(`[UPLOAD] Error details:`, error);
       throw new ErrorResponse('Error uploading file to Firebase Storage', 500);
     }
@@ -197,7 +217,10 @@ export class FirebaseService {
       return url;
     } catch (error) {
       this.logger.error('Error generating file URL:', error);
-      throw new ErrorResponse('Error generating file URL in Firebase Storage', 500);
+      throw new ErrorResponse(
+        'Error generating file URL in Firebase Storage',
+        500,
+      );
     }
   }
 
@@ -237,7 +260,10 @@ export class FirebaseService {
       return buffer;
     } catch (error) {
       this.logger.error('Error downloading file:', error);
-      throw new ErrorResponse('Error downloading file from Firebase Storage', 500);
+      throw new ErrorResponse(
+        'Error downloading file from Firebase Storage',
+        500,
+      );
     }
   }
 
@@ -263,7 +289,10 @@ export class FirebaseService {
       return url;
     } catch (error) {
       this.logger.error('Error generating upload URL:', error);
-      throw new ErrorResponse('Error generating upload URL in Firebase Storage', 500);
+      throw new ErrorResponse(
+        'Error generating upload URL in Firebase Storage',
+        500,
+      );
     }
   }
 }

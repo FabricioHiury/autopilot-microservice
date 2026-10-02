@@ -5,7 +5,7 @@ import { WhatsappOfficialModule } from './whatsapp-official/whatsapp-official.mo
 import { InstagramModule } from './instagram/instagram.module';
 import { FacebookModule } from './facebook/facebook.module';
 import { IntegrationsModule } from './integrations/integrations.module';
-import { ComunicationModule } from './comunication/comunication.module';
+import { CommunicationModule } from './communication/communication.module';
 
 @Module({
   imports: [
@@ -15,7 +15,7 @@ import { ComunicationModule } from './comunication/comunication.module';
     InstagramModule,
     FacebookModule,
     IntegrationsModule,
-    ComunicationModule,
+    CommunicationModule,
   ],
 })
 export class CoreModule {}

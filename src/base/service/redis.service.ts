@@ -11,6 +11,7 @@ export class RedisService implements OnModuleDestroy {
       host: process.env.REDIS_HOST || 'localhost',
       port: parseInt(process.env.REDIS_PORT || '6379'),
       password: process.env.REDIS_PASSWORD,
+      username: process.env.REDIS_USERNAME || undefined,
       connectTimeout: 10000,
       maxRetriesPerRequest: 5,
       enableAutoPipelining: false,

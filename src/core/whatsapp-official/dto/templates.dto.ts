@@ -1,15 +1,29 @@
-import { IsString, IsNotEmpty, IsOptional, IsArray, IsIn, ValidateNested, ArrayMinSize } from 'class-validator';
+import {
+  IsString,
+  IsNotEmpty,
+  IsOptional,
+  IsArray,
+  IsIn,
+  ValidateNested,
+  ArrayMinSize,
+} from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 import { Type } from 'class-transformer';
 
 export class TemplateComponentDto {
-  @ApiProperty({ example: 'BODY', enum: ['HEADER', 'BODY', 'FOOTER', 'BUTTONS'] })
+  @ApiProperty({
+    example: 'BODY',
+    enum: ['HEADER', 'BODY', 'FOOTER', 'BUTTONS'],
+  })
   @IsString()
   @IsNotEmpty()
   @IsIn(['HEADER', 'BODY', 'FOOTER', 'BUTTONS'])
   type: 'HEADER' | 'BODY' | 'FOOTER' | 'BUTTONS';
 
-  @ApiProperty({ example: 'Olá {{nome}}, aqui é {{vendedor}} da {{empresa}}', required: false })
+  @ApiProperty({
+    example: 'Hello {{name}}, this is {{seller}} from {{company}}',
+    required: false,
+  })
   @IsString()
   @IsOptional()
   text?: string;
@@ -29,8 +43,12 @@ export class TemplateComponentDto {
 
   @ApiProperty({
     required: false,
-    description: 'Exemplos para variáveis nomeadas no texto',
-    example: { nome: 'João Silva', vendedor: 'Maria Santos', empresa: 'Radial Automóveis' }
+    description: 'Examples for named text variables',
+    example: {
+      name: 'John Smith',
+      seller: 'Mary Smith',
+      company: 'AutoPilot Motors',
+    },
   })
   @IsOptional()
   examples?: Record<string, string>;
@@ -54,7 +72,10 @@ export class CreateTemplateDto {
   @IsNotEmpty()
   name: string;
 
-  @ApiProperty({ example: 'UTILITY', enum: ['UTILITY', 'MARKETING', 'AUTHENTICATION'] })
+  @ApiProperty({
+    example: 'UTILITY',
+    enum: ['UTILITY', 'MARKETING', 'AUTHENTICATION'],
+  })
   @IsString()
   @IsNotEmpty()
   @IsIn(['UTILITY', 'MARKETING', 'AUTHENTICATION'])
@@ -67,10 +88,16 @@ export class CreateTemplateDto {
 
   @ApiProperty({
     type: [TemplateComponentDto],
-    example: [{ type: 'BODY', text: 'Olá {{nome}}, aqui é {{vendedor}} da {{empresa}}', examples: { nome: 'João', vendedor: 'Maria', empresa: 'Radial' } }]
+    example: [
+      {
+        type: 'BODY',
+        text: 'Hello {{name}}, this is {{seller}} from {{company}}',
+        examples: { name: 'John', seller: 'Maria', company: 'Radial' },
+      },
+    ],
   })
   @IsArray()
-  @ArrayMinSize(1, { message: 'Pelo menos um componente é obrigatório' })
+  @ArrayMinSize(1, { message: 'At least one component is required' })
   @ValidateNested({ each: true })
   @Type(() => TemplateComponentDto)
   components: TemplateComponentDto[];
@@ -114,11 +141,9 @@ export class SendTemplateMessageDto {
     example: [
       {
         type: 'body',
-        parameters: [
-          { type: 'text', text: 'João' }
-        ]
-      }
-    ]
+        parameters: [{ type: 'text', text: 'John' }],
+      },
+    ],
   })
   @IsArray()
   @IsOptional()
@@ -144,4 +169,3 @@ export class TemplateResponseDto {
   @ApiProperty()
   components?: any[];
 }
-

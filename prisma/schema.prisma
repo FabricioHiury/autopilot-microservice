@@ -8,29 +8,32 @@ datasource db {
 }
 
 model WhatsAppAuthData {
-  id         String   @id @default(uuid())
-  instanceId String   @unique
-  updatedAt  DateTime @updatedAt
-  createdAt  DateTime @default(now())
-  storeId    String   @unique
-  store      Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
+  id            String   @id @default(uuid())
+  storeId       String   @unique @map("store_id")
+  instanceName  String   @unique @map("instance_name")
+  instanceToken String?  @map("instance_token")
+  phoneNumber   String?  @map("phone_number")
+  profileName   String?  @map("profile_name")
+  status        String   @default("disconnected")
+  createdAt     DateTime @default(now()) @map("created_at")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
-  @@unique([instanceId, storeId])
   @@map("whatsapp_auth_data")
 }
 
 model OlxAuthData {
   id               String    @id @default(uuid())
-  clientId         String
-  clientSecret     String
+  clientId         String    @map("client_id")
+  clientSecret     String    @map("client_secret")
   code             String?
-  receiveMessages  Boolean   @default(true)
-  accessToken      String?
-  uniqueId         String?   @unique
-  storeId          String    @unique
-  updatedAt        DateTime?
-  createdAt        DateTime  @default(now())
-  leadWebhookToken String?
+  receiveMessages  Boolean   @default(true) @map("receive_messages")
+  accessToken      String?   @map("access_token")
+  uniqueId         String?   @unique @map("unique_id")
+  storeId          String    @unique @map("store_id")
+  updatedAt        DateTime? @updatedAt @map("updated_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  leadWebhookToken String?   @map("lead_webhook_token")
   store            Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@unique([clientId, storeId])
@@ -39,17 +42,17 @@ model OlxAuthData {
 
 model InstagramAuthData {
   id                String    @id @default(uuid())
-  storeId           String    @unique
-  instagramAppId    String?   @unique
-  instagramGlobalId String?   @unique
-  uniqueId          String?   @unique
+  storeId           String    @unique @map("store_id")
+  instagramAppId    String?   @unique @map("instagram_app_id")
+  instagramGlobalId String?   @unique @map("instagram_global_id")
+  uniqueId          String?   @unique @map("unique_id")
   token             String?
-  tokenExpiry       DateTime?
-  updatedAt         DateTime?
-  createdAt         DateTime  @default(now())
-  scheduledRenewal  DateTime?
-  lastTokenRenewal  DateTime?
-  userToken         String?
+  tokenExpiry       DateTime? @map("token_expiry")
+  updatedAt         DateTime? @updatedAt @map("updated_at")
+  createdAt         DateTime  @default(now()) @map("created_at")
+  scheduledRenewal  DateTime? @map("scheduled_renewal")
+  lastTokenRenewal  DateTime? @map("last_token_renewal")
+  userToken         String?   @map("user_token")
   store             Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@unique([instagramAppId, storeId])
@@ -58,17 +61,17 @@ model InstagramAuthData {
 
 model FacebookAuthData {
   id               String    @id @default(uuid())
-  storeId          String    @unique
-  uniqueId         String?   @unique
-  pageId           String?   @unique
-  facebookUserId   String?   @unique
-  userToken        String?
-  pageToken        String?
-  tokenExpiry      DateTime?
-  updatedAt        DateTime?
-  createdAt        DateTime  @default(now())
-  scheduledRenewal DateTime?
-  lastTokenRenewal DateTime?
+  storeId          String    @unique @map("store_id")
+  uniqueId         String?   @unique @map("unique_id")
+  pageId           String?   @unique @map("page_id")
+  facebookUserId   String?   @unique @map("facebook_user_id")
+  userToken        String?   @map("user_token")
+  pageToken        String?   @map("page_token")
+  tokenExpiry      DateTime? @map("token_expiry")
+  updatedAt        DateTime? @updatedAt @map("updated_at")
+  createdAt        DateTime  @default(now()) @map("created_at")
+  scheduledRenewal DateTime? @map("scheduled_renewal")
+  lastTokenRenewal DateTime? @map("last_token_renewal")
   store            Store     @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@unique([pageId, storeId])
@@ -77,20 +80,22 @@ model FacebookAuthData {
 
 model WhatsAppOfficialAuthData {
   id            String   @id @default(uuid())
-  storeId       String   @unique
-  wabaId        String
-  phoneNumberId String
-  accessToken   String
-  verifyToken   String
-  businessPhone String
-  updatedAt     DateTime @updatedAt
-  createdAt     DateTime @default(now())
+  storeId       String   @unique @map("store_id")
+  wabaId        String   @map("waba_id")
+  phoneNumberId String   @map("phone_number_id")
+  accessToken   String   @map("access_token")
+  verifyToken   String   @map("verify_token")
+  businessPhone String   @map("business_phone")
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  createdAt     DateTime @default(now()) @map("created_at")
   store         Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@map("whatsapp_official_auth_data")
 }
 
 model Store {
+  createdAt                DateTime                  @default(now()) @map("created_at")
+  updatedAt                DateTime                  @updatedAt @map("updated_at")
   id                       String                    @id @unique
   facebookAuthData         FacebookAuthData?
   instagramAuthData        InstagramAuthData?
@@ -99,19 +104,64 @@ model Store {
   whatsAppAuthData         WhatsAppAuthData?
   whatsAppOfficialAuthData WhatsAppOfficialAuthData?
 
-  @@map("store")
+  @@map("stores")
 }
 
 model RequestDeletionData {
   id             String   @id @default(uuid())
   code           String   @unique
-  storeId        String
-  externalUserId String?
+  storeId        String   @map("store_id")
+  externalUserId String?  @map("external_user_id")
   channel        String
-  createdAt      DateTime @default(now())
-  updatedAt      DateTime @updatedAt
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
   store          Store    @relation(fields: [storeId], references: [id], onDelete: Cascade)
 
   @@unique([code, storeId])
   @@map("request_deletion_data")
+}
+
+// Durable queues use PostgreSQL leases. Redis is never the source of truth.
+model DeliveryJob {
+  id          String    @id @default(uuid())
+  queue       String
+  key         String
+  storeId     String?   @map("store_id")
+  provider    String?
+  kind        String
+  payload     Json
+  metadata    Json?
+  status      String    @default("pending")
+  attempts    Int       @default(0)
+  availableAt DateTime  @default(now()) @map("available_at")
+  leaseUntil  DateTime? @map("lease_until")
+  leaseToken  String?   @map("lease_token")
+  lastError   String?   @map("last_error")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+
+  @@unique([queue, key])
+  @@index([queue, status, availableAt])
+  @@map("delivery_jobs")
+}
+
+model OutboundMessage {
+  id                String   @id @default(uuid())
+  storeId           String   @map("store_id")
+  messageId         String   @map("message_id")
+  channel           String
+  recipient         String
+  provider          String
+  fingerprint       String
+  status            String   @default("sending")
+  externalMessageId String?  @map("external_message_id")
+  providerKey       Json?    @map("provider_key")
+  response          Json?
+  lastError         String?  @map("last_error")
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@unique([storeId, messageId])
+  @@unique([storeId, channel, externalMessageId])
+  @@map("outbound_messages")
 }

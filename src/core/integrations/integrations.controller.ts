@@ -1,3 +1,5 @@
+import { IntegrationsEnum } from './enum/integrations.enum';
+import { WhatsAppOfficialConfigDto } from '../whatsapp-official/dto/whatsapp-official.dto';
 import {
   Body,
   Controller,
@@ -8,21 +10,23 @@ import {
   Put,
   Query,
   UseGuards,
+  ParseUUIDPipe,
+  ParseEnumPipe,
 } from '@nestjs/common';
 import { IntegrationsService } from './integrations.service';
-import { OlxSaveClientDto } from 'src/core/olx/dto/olx-save-client.dto';
-import { ApiKeyGuard } from 'src/base/guard/api-key.guard';
-import { SaveInstagramIntegrationDto } from 'src/core/instagram/dto/save-integration.dto';
+import { OlxSaveClientDto } from '../olx/dto/olx-save-client.dto';
+import { ApiKeyGuard } from '../../base/guard/api-key.guard';
+import { SaveInstagramIntegrationDto } from '../instagram/dto/save-integration.dto';
 import { ApiExcludeEndpoint, ApiOperation, ApiTags } from '@nestjs/swagger';
-import { WhatsappSaveIntegrationDto } from 'src/core/whatsapp/dto/save-integration.dto';
+import { WhatsappSaveIntegrationDto } from '../whatsapp/dto/save-integration.dto';
 import { SaveFacebookIntegrationDto } from '../facebook/dto/save-integration.dto';
-import { SkipSerializer } from 'src/base/decorators/skip-serializer.decorator';
+import { SkipSerializer } from '../../base/decorators/skip-serializer.decorator';
 
 @ApiTags('Integrations')
 @UseGuards(ApiKeyGuard)
 @Controller('integrations')
 export class IntegrationsController {
-  constructor(private readonly integrationsService: IntegrationsService) { }
+  constructor(private readonly integrationsService: IntegrationsService) {}
 
   @ApiOperation({
     summary: 'Lists all available integrations',
@@ -35,8 +39,8 @@ export class IntegrationsController {
   @ApiOperation({
     summary: 'Returns WhatsApp QR code for authentication',
   })
-  @Get('/whatsapp/qrcode/store/:storeId')
-  async getWhatsappQrCode(@Param('storeId') storeId: string) {
+  @Get('/whatsapp/qrcode/:storeId')
+  async getWhatsappQrCode(@Param('storeId', ParseUUIDPipe) storeId: string) {
     return await this.integrationsService.getWhatsappQrCode(storeId);
   }
 
@@ -44,7 +48,7 @@ export class IntegrationsController {
     summary: 'Saves a store in the system',
   })
   @Post('/:storeId')
-  async saveStore(@Param('storeId') storeId: string) {
+  async saveStore(@Param('storeId', ParseUUIDPipe) storeId: string) {
     return await this.integrationsService.saveStore(storeId);
   }
 
@@ -52,7 +56,7 @@ export class IntegrationsController {
     summary: 'Deletes a store and all its integrations',
   })
   @Delete('/:storeId')
-  async deleteStore(@Param('storeId') storeId: string) {
+  async deleteStore(@Param('storeId', ParseUUIDPipe) storeId: string) {
     return await this.integrationsService.deleteStore(storeId);
   }
 
@@ -60,7 +64,7 @@ export class IntegrationsController {
     summary: 'Gets the status of all integrations for a store',
   })
   @Get('/:storeId/status')
-  async getIntegrationStatus(@Param('storeId') storeId: string) {
+  async getIntegrationStatus(@Param('storeId', ParseUUIDPipe) storeId: string) {
     return await this.integrationsService.getIntegrationStatus(storeId);
   }
 
@@ -76,15 +80,19 @@ export class IntegrationsController {
     summary: 'Configures WhatsApp Official API integration',
   })
   @Put('/whatsapp/official')
-  async saveWhatsappOfficialIntegration(@Body() params: any) {
-    return await this.integrationsService.saveWhatsappOfficialIntegration(params);
+  async saveWhatsappOfficialIntegration(
+    @Body() params: WhatsAppOfficialConfigDto,
+  ) {
+    return await this.integrationsService.saveWhatsappOfficialIntegration(
+      params,
+    );
   }
 
   @ApiOperation({
     summary: 'Get WhatsApp API type (official or unofficial)',
   })
   @Get('/whatsapp/:storeId/api-type')
-  async getWhatsappApiType(@Param('storeId') storeId: string) {
+  async getWhatsappApiType(@Param('storeId', ParseUUIDPipe) storeId: string) {
     const apiType = await this.integrationsService.getWhatsappApiType(storeId);
     return { apiType };
   }
@@ -99,23 +107,34 @@ export class IntegrationsController {
     @Query('accessToken') accessToken: string,
   ) {
     if (!wabaId || !accessToken) {
-      return { 
-        success: false, 
-        error: 'WABA ID and Access Token are required' 
+      return {
+        success: false,
+        error: 'WABA ID and Access Token are required',
       };
     }
-    
-    return await this.integrationsService.getWhatsappOfficialPhoneNumbers(wabaId, accessToken);
+
+    return await this.integrationsService.getWhatsappOfficialPhoneNumbers(
+      wabaId,
+      accessToken,
+    );
   }
 
   @ApiOperation({
     summary: 'Remove WhatsApp Official API integration',
   })
   @Delete('/whatsapp/official/:storeId')
-  async removeWhatsappOfficialIntegration(@Param('storeId') storeId: string) {
-    console.log(`[IntegrationsController] Received DELETE /whatsapp/official/${storeId}`);
-    const result = await this.integrationsService.removeWhatsappOfficialIntegration(storeId);
-    console.log(`[IntegrationsController] WhatsApp Official removal result:`, result);
+  async removeWhatsappOfficialIntegration(
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+  ) {
+    console.log(
+      `[IntegrationsController] Received DELETE /whatsapp/official/${storeId}`,
+    );
+    const result =
+      await this.integrationsService.removeWhatsappOfficialIntegration(storeId);
+    console.log(
+      `[IntegrationsController] WhatsApp Official removal result:`,
+      result,
+    );
     return result;
   }
 
@@ -140,7 +159,9 @@ export class IntegrationsController {
     summary: 'Removes Facebook integration',
   })
   @Delete('/facebook/:storeId')
-  async removeFacebookIntegration(@Param('storeId') storeId: string) {
+  async removeFacebookIntegration(
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+  ) {
     return await this.integrationsService.removeFacebookIntegration(storeId);
   }
 
@@ -148,7 +169,9 @@ export class IntegrationsController {
     summary: 'Removes Instagram integration',
   })
   @Delete('/instagram/:storeId')
-  async removeInstagramIntegration(@Param('storeId') storeId: string) {
+  async removeInstagramIntegration(
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+  ) {
     return await this.integrationsService.removeInstagramIntegration(storeId);
   }
 
@@ -165,7 +188,7 @@ export class IntegrationsController {
     description: 'Keeps data but disables webhook reception',
   })
   @Delete('/:storeId/olx/deactivate')
-  async removeOlxIntegration(@Param('storeId') storeId: string) {
+  async removeOlxIntegration(@Param('storeId', ParseUUIDPipe) storeId: string) {
     return await this.integrationsService.removeOlxIntegration(storeId);
   }
 
@@ -184,10 +207,14 @@ export class IntegrationsController {
   })
   @Post('/:storeId/:channel/clear-cache')
   async clearIntegrationCache(
-    @Param('storeId') storeId: string,
-    @Param('channel') channel: string
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+    @Param('channel', new ParseEnumPipe(IntegrationsEnum))
+    channel: IntegrationsEnum,
   ) {
-    await this.integrationsService.clearIntegrationCache(channel as any, storeId);
+    await this.integrationsService.clearIntegrationCache(
+      channel as any,
+      storeId,
+    );
     return { success: true, message: `Cache cleared for ${channel}` };
   }
 
@@ -196,7 +223,7 @@ export class IntegrationsController {
     description: 'Clears all integration cache for a specific store',
   })
   @Post('/:storeId/clear-cache')
-  async clearStoreCache(@Param('storeId') storeId: string) {
+  async clearStoreCache(@Param('storeId', ParseUUIDPipe) storeId: string) {
     await this.integrationsService.clearStoreCache(storeId);
     return { success: true, message: 'All integration cache cleared' };
   }
@@ -207,10 +234,14 @@ export class IntegrationsController {
   })
   @Post('/:storeId/:channel/refresh')
   async forceRefreshIntegration(
-    @Param('storeId') storeId: string,
-    @Param('channel') channel: string
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+    @Param('channel', new ParseEnumPipe(IntegrationsEnum))
+    channel: IntegrationsEnum,
   ) {
-    const result = await this.integrationsService.forceRefreshIntegration(channel as any, storeId);
+    const result = await this.integrationsService.forceRefreshIntegration(
+      channel as any,
+      storeId,
+    );
     return { success: true, data: result };
   }
 
@@ -220,8 +251,9 @@ export class IntegrationsController {
   })
   @Delete('/:storeId/:channel/remove')
   async removeIntegration(
-    @Param('storeId') storeId: string,
-    @Param('channel') channel: string
+    @Param('storeId', ParseUUIDPipe) storeId: string,
+    @Param('channel', new ParseEnumPipe(IntegrationsEnum))
+    channel: IntegrationsEnum,
   ) {
     await this.integrationsService.removeIntegration(channel as any, storeId);
     return { success: true, message: `Integration ${channel} removed` };

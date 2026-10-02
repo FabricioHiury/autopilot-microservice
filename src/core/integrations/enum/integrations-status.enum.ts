@@ -1,12 +1,12 @@
 export enum IntegrationsStatusEnum {
   OK = 'ok',
-  ERROR = 'erro',
-  NOT_CONFIGURED = 'nao_configurado',
+  ERROR = 'error',
+  NOT_CONFIGURED = 'not_configured',
 }
 
 export enum IntegrationsStatusErrorMessageEnum {
-  CHANNEL_UNAVAILABLE = 'Canal indisponível',
-  INTEGRATION_NOT_CONFIGURED = 'Integração não configurada',
-  INVALID_TOKEN = 'Token inválido',
-  ERROR_UNKNOWN = 'Erro desconhecido',
+  CHANNEL_UNAVAILABLE = 'Channel unavailable',
+  INTEGRATION_NOT_CONFIGURED = 'Integration not configured',
+  INVALID_TOKEN = 'Invalid token',
+  ERROR_UNKNOWN = 'Unknown error',
 }

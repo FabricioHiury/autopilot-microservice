@@ -1,8 +1,9 @@
+import { deliverMetaStatuses } from '../delivery/meta-status.utils';
 import { Injectable, Logger } from '@nestjs/common';
-import { ErrorResponse } from 'src/base/exceptions/error.response.handler';
-import { PrismaService } from 'src/base/service/prisma.service';
+import { ErrorResponse } from '../../base/exceptions/error.response.handler';
+import { PrismaService } from '../../base/service/prisma.service';
 import { uuidv7 } from 'uuidv7';
-import { IntegrationsEnum } from 'src/core/integrations/enum/integrations.enum';
+import { IntegrationsEnum } from '../integrations/enum/integrations.enum';
 import {
   FacebookUserDataResponse,
   FacebookGetTokenDto,
@@ -18,16 +19,16 @@ import { stringify } from 'querystring';
 import { EventEmitter2 } from '@nestjs/event-emitter';
 import { randomBytes } from 'crypto';
 import { facebookUtils } from './facebook.utils';
-import { ChatOutgoingMessageDto } from '../comunication/dto/outgoing-message.dto';
-import { ChatIncomingMessageDto } from '../comunication/dto/incoming-message.dto';
+import { ProviderMessageEvent } from '../communication/dto/outgoing-message.dto';
+import { SendMessageDto } from '../communication/dto/incoming-message.dto';
 import { IntegrationStatusDto } from '../integrations/dto/integrations-status.dto';
 import {
   IntegrationsStatusEnum,
   IntegrationsStatusErrorMessageEnum,
-} from 'src/core/integrations/enum/integrations-status.enum';
-import { RateLimitService } from 'src/base/service/rate-limit.service';
-import { FirebaseService } from 'src/base/service/firebase.service';
-import { MessageTypeEnum } from 'src/core/integrations/enum/message-type.enum';
+} from '../integrations/enum/integrations-status.enum';
+import { RateLimitService } from '../../base/service/rate-limit.service';
+import { FirebaseService } from '../../base/service/firebase.service';
+import { MessageTypeEnum } from '../integrations/enum/message-type.enum';
 
 interface ApiUsage {
   call_count: number;
@@ -54,23 +55,42 @@ export class FacebookService {
   /**
    * Upload profile avatar to Firebase under an instance-like path
    */
-  private async uploadProfileAvatar(instancePrefix: string, senderId: string, url?: string): Promise<string | null> {
+  private async uploadProfileAvatar(
+    instancePrefix: string,
+    senderId: string,
+    url?: string,
+  ): Promise<string | null> {
     if (!url) return null;
 
     try {
-      const response = await axios.get<ArrayBuffer>(url, { responseType: 'arraybuffer', timeout: 20000 });
-      const contentType = response.headers['content-type'] || 'image/jpeg';
+      const response = await axios.get<ArrayBuffer>(url, {
+        responseType: 'arraybuffer',
+        timeout: 20000,
+      });
+      const contentType = String(
+        response.headers['content-type'] || 'image/jpeg',
+      );
       const path = `${instancePrefix}/profile/${senderId}`;
 
       try {
         await this.firebaseService.deleteByPath(path);
       } catch (error) {
-        this.logger.warn('Failed to delete Facebook avatar:', (error as any)?.message);
+        this.logger.warn(
+          'Failed to delete Facebook avatar:',
+          (error as any)?.message,
+        );
       }
-      const [, signedUrl] = await this.firebaseService.uploadBufferToPath(Buffer.from(response.data), contentType, path);
+      const [, signedUrl] = await this.firebaseService.uploadBufferToPath(
+        Buffer.from(response.data),
+        contentType,
+        path,
+      );
       return signedUrl;
     } catch (error) {
-      this.logger.warn('Failed to upload Facebook avatar:', (error as any)?.message);
+      this.logger.warn(
+        'Failed to upload Facebook avatar:',
+        (error as any)?.message,
+      );
       return url ?? null;
     }
   }
@@ -107,7 +127,9 @@ export class FacebookService {
   /**
    * Find store ID by Facebook user ID
    */
-  private async findStoreIdByFacebookId(facebookUserId: string): Promise<string> {
+  private async findStoreIdByFacebookId(
+    facebookUserId: string,
+  ): Promise<string> {
     const store = await this.prismaService.facebookAuthData.findUnique({
       where: {
         facebookUserId: facebookUserId,
@@ -141,11 +163,17 @@ export class FacebookService {
     });
 
     if (!store) {
-      throw new ErrorResponse('Store not found. You need to integrate with Facebook before trying to send messages.', 404);
+      throw new ErrorResponse(
+        'Store not found. You need to integrate with Facebook before trying to send messages.',
+        404,
+      );
     }
 
     if (!store.userToken || !store.pageToken) {
-      throw new ErrorResponse('Token not found, you need to authorize the Facebook integration before accessing this route.', 401);
+      throw new ErrorResponse(
+        'Token not found, you need to authorize the Facebook integration before accessing this route.',
+        401,
+      );
     }
 
     return store;
@@ -231,28 +259,57 @@ export class FacebookService {
     };
 
     try {
-      const { data: userData } = await axios.get<FacebookGetTokenResponse>(`${this.facebookGraphUrl}/oauth/access_token`, { params, headers: this.getHumanizedHeaders() });
-      const { data: extData } = await axios.get<FacebookGetTokenResponse>(`${this.facebookGraphUrl}/oauth/access_token`, { params: { grant_type: 'fb_exchange_token', client_id: process.env.META_APP_ID, client_secret: process.env.META_APP_SECRET, fb_exchange_token: userData.access_token }, headers: this.getHumanizedHeaders() });
+      const { data: userData } = await axios.get<FacebookGetTokenResponse>(
+        `${this.facebookGraphUrl}/oauth/access_token`,
+        { params, headers: this.getHumanizedHeaders() },
+      );
+      const { data: extData } = await axios.get<FacebookGetTokenResponse>(
+        `${this.facebookGraphUrl}/oauth/access_token`,
+        {
+          params: {
+            grant_type: 'fb_exchange_token',
+            client_id: process.env.META_APP_ID,
+            client_secret: process.env.META_APP_SECRET,
+            fb_exchange_token: userData.access_token,
+          },
+          headers: this.getHumanizedHeaders(),
+        },
+      );
 
       const longLivedUserToken = extData.access_token;
-      const userTokenExpiresAt = extData.expires_in ? addSeconds(new Date(), extData.expires_in) : addDays(new Date(), 50);
+      const userTokenExpiresAt = extData.expires_in
+        ? addSeconds(new Date(), extData.expires_in)
+        : addDays(new Date(), 50);
 
-      const { data: pages } = await axios.get<FacebookPageResponse>(`${this.facebookGraphUrl}/me/accounts`, { params: { access_token: longLivedUserToken } });
+      const { data: pages } = await axios.get<FacebookPageResponse>(
+        `${this.facebookGraphUrl}/me/accounts`,
+        { params: { access_token: longLivedUserToken } },
+      );
 
       if (!pages.data.length) {
-        throw new ErrorResponse('Nenhuma página encontrada para este usuário.', 404);
+        throw new ErrorResponse('No pages found for this user.', 404);
       }
 
       const page = pages.data[0];
-      const currentAuth = await this.prismaService.facebookAuthData.findUnique({ where: { uniqueId } });
+      const currentAuth = await this.prismaService.facebookAuthData.findUnique({
+        where: { uniqueId },
+      });
 
       if (!currentAuth?.storeId) {
-        throw new ErrorResponse('Store not found to complete Facebook integration.', 404);
+        throw new ErrorResponse(
+          'Store not found to complete Facebook integration.',
+          404,
+        );
       }
 
-      const existingByPage = await this.prismaService.facebookAuthData.findUnique({ where: { pageId: page.id } }).catch(() => null);
+      const existingByPage = await this.prismaService.facebookAuthData
+        .findUnique({ where: { pageId: page.id } })
+        .catch(() => null);
       if (existingByPage && existingByPage.storeId !== currentAuth.storeId) {
-        throw new ErrorResponse('This Facebook page is already linked to another store. Disconnect it before continuing.', 400);
+        throw new ErrorResponse(
+          'This Facebook page is already linked to another store. Disconnect it before continuing.',
+          400,
+        );
       }
 
       await this.prismaService.facebookAuthData.update({
@@ -270,12 +327,17 @@ export class FacebookService {
       return { pageId: page.id, pageToken: page.access_token };
     } catch (error) {
       if (this.isRateLimitError(error)) {
-        this.logger.warn('Rate limit atingido, implementando backoff exponencial');
-        throw new ErrorResponse('Limite de requisições atingido. Tente novamente mais tarde.', 500);
+        this.logger.warn(
+          'Rate limit atingido, implementando backoff exponencial',
+        );
+        throw new ErrorResponse('Request limit reached. Try again later.', 500);
       }
 
       this.logger.error(error);
-      throw new ErrorResponse(`Erro ao trocar código de acesso por token: ${error?.message}`, 500);
+      throw new ErrorResponse(
+        `Failed to exchange authorization code for token: ${error?.message}`,
+        500,
+      );
     }
   }
 
@@ -286,7 +348,14 @@ export class FacebookService {
     if (!error.response) return false;
 
     const { status, data } = error.response;
-    return (status === 429 || (data && data.error && (data.error.code === 4 || data.error.code === 17 || data.error.message.includes('limit'))));
+    return (
+      status === 429 ||
+      (data &&
+        data.error &&
+        (data.error.code === 4 ||
+          data.error.code === 17 ||
+          data.error.message.includes('limit')))
+    );
   }
 
   /**
@@ -321,16 +390,26 @@ export class FacebookService {
   /**
    * Activate webhook for receiving messages
    */
-  private async activateMessageReceivingWebhook(pageId: string, token: string): Promise<void> {
+  private async activateMessageReceivingWebhook(
+    pageId: string,
+    token: string,
+  ): Promise<void> {
     const body = stringify({
       subscribed_fields: 'messages,messaging_postbacks',
       access_token: token,
     });
 
     try {
-      await axios.post(`${this.facebookGraphUrl}/${pageId}/subscribed_apps`, body, { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+      await axios.post(
+        `${this.facebookGraphUrl}/${pageId}/subscribed_apps`,
+        body,
+        { headers: { 'Content-Type': 'application/x-www-form-urlencoded' } },
+      );
     } catch (error) {
-      throw new ErrorResponse(`Error configuring message reception: ${error?.message}`, 500);
+      throw new ErrorResponse(
+        `Error configuring message reception: ${error?.message}`,
+        500,
+      );
     }
   }
 
@@ -359,16 +438,28 @@ export class FacebookService {
       const errorMessage = errorData?.message;
 
       if (status === 400) {
-        this.logger.warn(`[FACEBOOK] Failed to get sender data for ${senderPSID}:`, {
-          message,
-          errorCode,
-          errorSubcode,
-          errorMessage,
-        });
-        return { first_name: undefined, last_name: undefined, profile_pic: undefined };
+        this.logger.warn(
+          `[FACEBOOK] Failed to get sender data for ${senderPSID}:`,
+          {
+            message,
+            errorCode,
+            errorSubcode,
+            errorMessage,
+          },
+        );
+        return {
+          first_name: undefined,
+          last_name: undefined,
+          profile_pic: undefined,
+        };
       } else {
-        this.logger.error(`[FACEBOOK] Error getting sender data for ${senderPSID}: ${message}`);
-        throw new ErrorResponse(`Error getting Facebook message sender data: ${message}`, 500);
+        this.logger.error(
+          `[FACEBOOK] Error getting sender data for ${senderPSID}: ${message}`,
+        );
+        throw new ErrorResponse(
+          `Error getting Facebook message sender data: ${message}`,
+          500,
+        );
       }
     }
   }
@@ -386,13 +477,21 @@ export class FacebookService {
       );
       const name = data?.name || '';
       const profilePic = data?.picture?.data?.url as string | undefined;
-      return { first_name: name, last_name: '', profile_pic: profilePic } as FacebookUserDataResponse;
+      return {
+        first_name: name,
+        last_name: '',
+        profile_pic: profilePic,
+      } as FacebookUserDataResponse;
     } catch (error: any) {
       const status = error?.response?.status;
       const message = error?.message || 'unknown error';
-      if (status === 400) this.logger.warn('Error getting Facebook page data', message);
+      if (status === 400)
+        this.logger.warn('Error getting Facebook page data', message);
       else this.logger.error('Error getting Facebook page data', message);
-      throw new ErrorResponse(`Error getting Facebook page data: ${message}`, 500);
+      throw new ErrorResponse(
+        `Error getting Facebook page data: ${message}`,
+        500,
+      );
     }
   }
 
@@ -400,7 +499,8 @@ export class FacebookService {
    * Get authentication URL for Facebook
    */
   async getAuthenticationUrl(uniqueId: string): Promise<string> {
-    const scope = 'pages_show_list,pages_manage_metadata,pages_messaging,pages_read_engagement,business_management';
+    const scope =
+      'pages_show_list,pages_manage_metadata,pages_messaging,pages_read_engagement,business_management';
     const state = uniqueId;
     const clientId = process.env.META_APP_ID;
 
@@ -448,7 +548,10 @@ export class FacebookService {
 
       return this.getAuthenticationUrl(uniqueId);
     } catch (error) {
-      throw new ErrorResponse(`Error saving Facebook client: ${error?.message}`, 500);
+      throw new ErrorResponse(
+        `Error saving Facebook client: ${error?.message}`,
+        500,
+      );
     }
   }
 
@@ -456,7 +559,7 @@ export class FacebookService {
     if (!code || !uniqueId) {
       throw new ErrorResponse(
         'Facebook integration not authorized by the store.',
-        400
+        400,
       );
     }
 
@@ -465,22 +568,24 @@ export class FacebookService {
     });
 
     if (!store) {
-      throw new ErrorResponse('Store not found, you need to save Facebook integration data before accessing this route.', 404);
+      throw new ErrorResponse(
+        'Store not found, you need to save Facebook integration data before accessing this route.',
+        404,
+      );
     }
 
     const { pageToken, pageId } = await this.getAndSaveTokens(code, uniqueId);
 
     await this.activateMessageReceivingWebhook(pageId, pageToken);
 
-    this.eventEmitter.emit('integration.success', {
-      storeId: store.storeId,
-      plataforma: IntegrationsEnum.FACEBOOK,
-    });
-
     return `Facebook integration successfully authorized. You can now send and receive messages!`;
   }
 
-  async receiveMessage(payload: FacebookPayload, signature: string, body: Buffer): Promise<void> {
+  async receiveMessage(
+    payload: FacebookPayload,
+    signature: string,
+    body: Buffer,
+  ): Promise<void> {
     facebookUtils.validatePayloadSignature(body, signature);
 
     if (!payload.entry || payload.entry.length === 0) {
@@ -491,6 +596,13 @@ export class FacebookService {
       const storeAuth = await this.findStoreAuthByPageId(entry.id);
 
       for (const message of entry.messaging) {
+        await deliverMetaStatuses(
+          this.prismaService,
+          this.eventEmitter,
+          storeAuth.storeId,
+          'facebook',
+          message,
+        );
         if (
           !message.message ||
           message.delivery ||
@@ -502,77 +614,96 @@ export class FacebookService {
         }
 
         const isEcho = !!message.message.is_echo;
-        if (isEcho && message.message.text?.match(/^\*[^*]+\*:\n/)) {
-          this.eventEmitter.emit('integration.success', {
-            storeId: storeAuth.storeId,
-            plataforma: IntegrationsEnum.FACEBOOK,
-            idMensagemExterna: message.message.mid
-          });
-          continue;
-        } else if (isEcho && !message.message.text?.match(/^\*[^*]+\*:\n/)) {
-          continue;
-        }
-
         let name = '';
         let profilePicUrl: string | null = null;
-        const counterpartId = message.sender.id;
+        const counterpartId = isEcho ? message.recipient.id : message.sender.id;
         try {
-          const { first_name, last_name, profile_pic } = await this.getSenderData(counterpartId, storeAuth.pageToken);
+          const { first_name, last_name, profile_pic } =
+            await this.getSenderData(counterpartId, storeAuth.pageToken);
           name = `${first_name} ${last_name}`.trim();
           profilePicUrl = profile_pic || null;
         } catch (e: any) {
           this.logger.warn('Proceeding without Facebook sender profile data');
         }
 
-        const facebookMessage: ChatOutgoingMessageDto = {
+        const facebookMessage: ProviderMessageEvent = {
           storeId: storeAuth.storeId,
-          idMensagem: message.message.mid,
-          idDestinatarioApiExterna: message.sender.id,
-          mensagem: message.message.text ?? '',
-          anexoMensagem: message.message.attachments?.[0]?.payload?.url || undefined,
-          canal: IntegrationsEnum.FACEBOOK,
+          messageId: message.message.mid,
+          externalContactId: counterpartId,
+          text: message.message.text ?? '',
+          attachmentUrl:
+            message.message.attachments?.[0]?.payload?.url || undefined,
+          channel: IntegrationsEnum.FACEBOOK,
           timestamp: new Date(message.timestamp),
-          metadados: {
-            nome: name,
-            urlAvatar: profilePicUrl ?? undefined,
+          metadata: {
+            name: name,
+            externalAdId: (
+              (message as any).referral || (message.message as any).referral
+            )?.ad_id,
+            sourceDetails: JSON.stringify(
+              (message as any).referral ||
+                (message.message as any).referral ||
+                {},
+            ),
+            avatarUrl: profilePicUrl ?? undefined,
           },
-          enviadaLoja: false,
-          tipo: (() => {
+          sentByStore: isEcho,
+          type: (() => {
             const a = message.message.attachments?.[0];
             if (!a) return MessageTypeEnum.TEXT;
             const t = (a.type || '').toLowerCase();
             const url = String(a.payload?.url || '').toLowerCase();
             if (t === 'sticker') return MessageTypeEnum.STICKER;
-            if (t === 'image') return /sticker|stickers/.test(url) || /\.webp(\?|$)/.test(url) || /\.gif(\?|$)/.test(url) ? MessageTypeEnum.STICKER : MessageTypeEnum.IMAGE;
+            if (t === 'image')
+              return /sticker|stickers/.test(url) ||
+                /\.webp(\?|$)/.test(url) ||
+                /\.gif(\?|$)/.test(url)
+                ? MessageTypeEnum.STICKER
+                : MessageTypeEnum.IMAGE;
             if (t === 'video') return MessageTypeEnum.VIDEO;
             if (t === 'audio') return MessageTypeEnum.AUDIO;
             return MessageTypeEnum.UNKNOWN;
           })(),
         };
 
-        this.eventEmitter.emit('message.receive', facebookMessage);
+        await this.eventEmitter.emitAsync('message.receive', facebookMessage);
       }
     }
   }
 
-  async sendMessage({ storeId: storeId, destinatario: recipient, mensagem: messageText, anexoMensagem: messageAttachment, tipoAnexo }: ChatIncomingMessageDto): Promise<string> {
+  async sendMessage({
+    storeId: storeId,
+    recipient: recipient,
+    text: messageText,
+    attachmentUrl: messageAttachment,
+    attachmentType: requestedAttachmentType,
+  }: SendMessageDto): Promise<string> {
     await this.rateLimit.checkAppVolumeLimit();
     const store = await this.findAuthenticatedStoreById(storeId);
 
     if (!messageText && !messageAttachment) {
-      throw new ErrorResponse(
-        'Mensagem e anexo não fornecidos. Pelo menos um destes itens deve ser fornecido.',
-        400
-      );
+      throw new ErrorResponse('Text or an attachment must be provided.', 400);
     }
 
     const message = (() => {
       if (messageAttachment) {
-        const lower = (tipoAnexo || '').toLowerCase();
-        const isAudio = lower.startsWith('audio') || /\.(mp3|wav|m4a|aac|oga)(\?|$)/i.test(messageAttachment);
-        const isVideo = lower.startsWith('video') || /\.(mp4|mov|mkv|webm)(\?|$)/i.test(messageAttachment);
-        const isImage = lower.startsWith('image') || /\.(png|jpe?g|gif|webp|bmp|tiff?)(\?|$)/i.test(messageAttachment);
-        const attachmentType = isAudio ? 'audio' : isVideo ? 'video' : isImage ? 'image' : 'file';
+        const lower = (requestedAttachmentType || '').toLowerCase();
+        const isAudio =
+          lower.startsWith('audio') ||
+          /\.(mp3|wav|m4a|aac|oga)(\?|$)/i.test(messageAttachment);
+        const isVideo =
+          lower.startsWith('video') ||
+          /\.(mp4|mov|mkv|webm)(\?|$)/i.test(messageAttachment);
+        const isImage =
+          lower.startsWith('image') ||
+          /\.(png|jpe?g|gif|webp|bmp|tiff?)(\?|$)/i.test(messageAttachment);
+        const attachmentType = isAudio
+          ? 'audio'
+          : isVideo
+            ? 'video'
+            : isImage
+              ? 'image'
+              : 'file';
         return {
           attachment: {
             type: attachmentType,
@@ -598,7 +729,8 @@ export class FacebookService {
         payload.tag = 'HUMAN_AGENT';
       }
 
-      const response = await axios.post(`${this.facebookGraphUrl}/${store.pageId}/messages`,
+      const response = await axios.post(
+        `${this.facebookGraphUrl}/${store.pageId}/messages`,
         payload,
         {
           params: {
@@ -611,14 +743,17 @@ export class FacebookService {
         throw new ErrorResponse('Failed to send message.', 500);
       }
 
-      return 'Message sent successfully!';
+      return response.data?.message_id || null;
     } catch (error) {
       if (isAxiosError(error)) {
         const errorMessage =
           error.response?.data?.error?.message || error.message;
-        throw new ErrorResponse(`Erro ao enviar mensagem: ${this.formatErrorMessage(errorMessage)}`, 500);
+        throw new ErrorResponse(
+          `Failed to send message: ${this.formatErrorMessage(errorMessage)}`,
+          500,
+        );
       }
-      throw new ErrorResponse(`Erro ao enviar mensagem: ${error.message}`, 500);
+      throw new ErrorResponse(`Failed to send message: ${error.message}`, 500);
     }
   }
 
@@ -659,8 +794,11 @@ export class FacebookService {
       healthCheckObject.message = null;
       return healthCheckObject;
     } catch (error) {
-      if (axios.isAxiosError(error) && [400, 401].includes(error.response?.status)) {
-        this.logger.warn(`Facebook token inválido para loja ${storeId}`);
+      if (
+        axios.isAxiosError(error) &&
+        [400, 401].includes(error.response?.status)
+      ) {
+        this.logger.warn(`Invalid Facebook token for store ${storeId}`);
       } else {
         this.logger.error(`Erro no Facebook healthCheck:`, error.message);
       }
@@ -812,13 +950,13 @@ export class FacebookService {
 
         this.apiUsageData.businessUsage = businessUsage;
         this.logger.log(
-          `Uso de negócios da API atualizado: ${JSON.stringify(businessUsage)}`,
+          `API business usage updated: ${JSON.stringify(businessUsage)}`,
         );
       }
 
       this.apiUsageData.lastCheck = new Date();
     } catch (error) {
-      this.logger.error('Erro ao processar cabeçalhos de uso da API:', error);
+      this.logger.error('Failed to process API usage headers:', error);
     }
   }
 
@@ -835,7 +973,7 @@ export class FacebookService {
 
     if (isNearAppLimit || isNearBusinessLimit) {
       this.logger.warn(
-        `Próximo do limite de API: App Usage: ${appUsage.call_count}%, Business Usage: ${businessUsage.call_count}%`,
+        `Approaching API limit: App Usage: ${appUsage.call_count}%, Business Usage: ${businessUsage.call_count}%`,
       );
 
       const delayFactor = Math.max(
@@ -853,7 +991,9 @@ export class FacebookService {
         maxDelay,
       );
 
-      this.logger.log(`Aplicando atraso de ${delayMs}ms devido a limites de API`);
+      this.logger.log(
+        `Aplicando atraso de ${delayMs}ms devido a limites de API`,
+      );
 
       await new Promise((resolve) => setTimeout(resolve, delayMs));
     }
@@ -872,7 +1012,9 @@ export class FacebookService {
       store.lastTokenRenewal &&
       new Date(store.lastTokenRenewal) > oneDayAgo
     ) {
-      this.logger.log(`Token para loja ID ${storeId} foi renovado recentemente. Pulando.`);
+      this.logger.log(
+        `Token para loja ID ${storeId} foi renovado recentemente. Pulando.`,
+      );
       return;
     }
 
@@ -911,7 +1053,10 @@ export class FacebookService {
         this.updateApiUsage(error.response.headers);
       }
 
-      throw new ErrorResponse(`Erro ao renovar token do Facebook: ${error?.message}`, 500);
+      throw new ErrorResponse(
+        `Erro ao renovar token do Facebook: ${error?.message}`,
+        500,
+      );
     }
   }
 }

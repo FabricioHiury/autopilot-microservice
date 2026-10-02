@@ -1,19 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import {
+  Injectable,
+  OnModuleInit,
+  OnApplicationShutdown,
+} from '@nestjs/common';
 import { PrismaClient } from '@prisma/client';
-
 @Injectable()
-export class PrismaService extends PrismaClient {
-  private static instance: PrismaClient;
-
-  public static getInstance(): PrismaClient {
-    if (!PrismaService.instance) {
-      PrismaService.instance = new PrismaClient({
-        log: ['warn', 'error'],
-      });
-
-      PrismaService.instance.$connect();
-    }
-
-    return PrismaService.instance;
+export class PrismaService
+  extends PrismaClient
+  implements OnModuleInit, OnApplicationShutdown
+{
+  constructor() {
+    super({ log: ['warn', 'error'] });
+  }
+  async onModuleInit() {
+    await this.$connect();
+  }
+  async onApplicationShutdown() {
+    await this.$disconnect();
   }
 }

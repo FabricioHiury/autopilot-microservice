@@ -1,23 +1,11 @@
 import { Module } from '@nestjs/common';
 import { WhatsappService } from './whatsapp.service';
 import { WhatsappController } from './whatsapp.controller';
-import { WhatsappMessageReceiver } from './services/whatsapp-message.receiver';
-import { WhatsappLocalAuth } from './auth/whatsapp-local.auth';
-import { MessageQueueService } from './services/message-queue.service';
-
+import { EvolutionApiService } from './services/evolution-api.service';
+import { EvolutionWebhookController } from './evolution-webhook.controller';
 @Module({
-  imports: [],
-  controllers: [
-    WhatsappController
-  ],
-  providers: [
-    WhatsappService,
-    WhatsappMessageReceiver,
-    WhatsappLocalAuth,
-    MessageQueueService,
-  ],
-  exports: [
-    WhatsappService
-  ],
+  controllers: [WhatsappController, EvolutionWebhookController],
+  providers: [WhatsappService, EvolutionApiService],
+  exports: [WhatsappService],
 })
-export class WhatsappModule { }
+export class WhatsappModule {}

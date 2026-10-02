@@ -1,0 +1,77 @@
+services:
+  gateway1: &gateway
+    image: autopilot-micro:local
+    build:
+      context: ..
+    environment: &environment
+      DATABASE_URL: postgresql://postgres:test-password@postgres:5432/autopilot_micro_test
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      MICROSERVICE_TOKEN: test-shared-secret
+      AUTOPILOT_URL: http://backend:3003
+      APP_BASE_URL: http://gateway1:3005
+      EVOLUTION_API_URL: http://evolution:8080
+      EVOLUTION_API_KEY: test-evolution-key
+      EVOLUTION_WEBHOOK_TOKEN: test-webhook-secret
+    ports: ['127.0.0.1:56005:3005']
+    depends_on:
+      db-init:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+      evolution:
+        condition: service_started
+  gateway2:
+    <<: *gateway
+    ports: ['127.0.0.1:56006:3005']
+  db-init:
+    build:
+      context: ..
+      target: builder
+    command: ['pnpm', 'exec', 'prisma', 'db', 'push', '--skip-generate']
+    environment:
+      DATABASE_URL: postgresql://postgres:test-password@postgres:5432/autopilot_micro_test
+    depends_on:
+      postgres:
+        condition: service_healthy
+  backend:
+    image: node:22-alpine
+    command: ['node', '/server.mjs']
+    volumes:
+      - ./runtime-backend.mjs:/server.mjs:ro
+    ports: ['127.0.0.1:56103:3003']
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_PASSWORD: test-password
+      POSTGRES_DB: autopilot_micro_test
+    ports: ['127.0.0.1:55439:5432']
+    volumes:
+      - ../docker/init-databases.sql:/docker-entrypoint-initdb.d/01-databases.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U postgres -d autopilot_micro_test']
+      interval: 2s
+      timeout: 3s
+      retries: 20
+  redis:
+    image: redis:7-alpine
+    ports: ['127.0.0.1:56389:6379']
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 2s
+      timeout: 3s
+      retries: 20
+  evolution:
+    image: evoapicloud/evolution-api:v2.3.7
+    environment:
+      AUTHENTICATION_API_KEY: test-evolution-key
+      DATABASE_PROVIDER: postgresql
+      DATABASE_CONNECTION_URI: postgresql://postgres:test-password@postgres:5432/evolution
+      CACHE_REDIS_ENABLED: 'true'
+      CACHE_REDIS_URI: redis://redis:6379/1
+      WEBHOOK_GLOBAL_ENABLED: 'false'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy

@@ -4,7 +4,7 @@ export enum InstagramMessageOriginEnum {
   POST_REPLY = 'post_reply',
   REEL_REPLY = 'reel_reply',
   REFERRAL = 'referral',
-  UNKNOWN = 'unknown'
+  UNKNOWN = 'unknown',
 }
 
 export interface InstagramMessageOriginDetails {
