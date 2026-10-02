@@ -33,8 +33,6 @@ export interface FacebookUserDataResponse {
   is_business_follow_user?: boolean;
 }
 
-// Interfaces de retorno da rota de listar páginas do usuário
-
 interface Category {
   id: string;
   name: string;

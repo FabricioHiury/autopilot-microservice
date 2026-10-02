@@ -1,19 +1,18 @@
-import { Injectable, CanActivate, ExecutionContext } from '@nestjs/common';
-import { Request } from 'express';
-import { ErrorResponse } from 'src/base/exceptions/error.response.handler';
-
+import {
+  CanActivate,
+  ExecutionContext,
+  Injectable,
+  UnauthorizedException,
+} from '@nestjs/common';
+import { matchesSecret } from '../../core/delivery/delivery.utils';
 @Injectable()
 export class ApiKeyGuard implements CanActivate {
-  constructor() { }
-
   canActivate(context: ExecutionContext): boolean {
-    const request: Request = context.switchToHttp().getRequest();
-    const apiToken = request.headers["x-micro-token"] as string;
-
-    if (apiToken && apiToken === process.env.API_KEY) {
-      return true;
-    } else {
-      throw new ErrorResponse("Unauthorized", 401);
-    }
+    const request = context.switchToHttp().getRequest();
+    const token =
+      request.headers['x-micro-token'] || request.headers['x-api-key'];
+    if (!matchesSecret(token, process.env.MICROSERVICE_TOKEN))
+      throw new UnauthorizedException('Unauthorized');
+    return true;
   }
 }

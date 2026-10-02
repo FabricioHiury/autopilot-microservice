@@ -6,7 +6,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import Redis from 'ioredis';
-import { PrismaService } from 'src/base/service/prisma.service';
+import { PrismaService } from './prisma.service';
 
 type InstagramMsgType = 'text' | 'media' | 'reply';
 
@@ -28,24 +28,27 @@ export class RateLimitService implements OnModuleDestroy {
     const password = process.env.REDIS_PASSWORD;
 
     if (!host || !portStr) {
-      throw new Error('REDIS_HOST e REDIS_PORT são obrigatórios.');
+      throw new Error('REDIS_HOST and REDIS_PORT are required.');
     }
     const port = Number(portStr);
     if (Number.isNaN(port)) {
-      throw new Error('REDIS_PORT inválida.');
+      throw new Error('Invalid REDIS_PORT.');
     }
 
     this.redis = new Redis({
       host,
       port,
       password,
+      username: process.env.REDIS_USERNAME || undefined,
       lazyConnect: true,
       maxRetriesPerRequest: null,
       enableOfflineQueue: false,
     });
 
     this.redis.connect().catch((err) => {
-      throw new ServiceUnavailableException(`Falha ao conectar no Redis: ${err?.message ?? err}`);
+      throw new ServiceUnavailableException(
+        `Falha ao conectar no Redis: ${err?.message ?? err}`,
+      );
     });
   }
 
@@ -63,7 +66,9 @@ export class RateLimitService implements OnModuleDestroy {
       }
       return count;
     } catch (err: any) {
-      throw new ServiceUnavailableException(`Erro no Redis: ${err?.message ?? err}`);
+      throw new ServiceUnavailableException(
+        `Erro no Redis: ${err?.message ?? err}`,
+      );
     }
   }
 
@@ -74,16 +79,24 @@ export class RateLimitService implements OnModuleDestroy {
     try {
       activeUsers = await this.prisma.store.count();
     } catch (err: any) {
-      throw new ServiceUnavailableException(`Erro ao consultar usuários ativos: ${err?.message ?? err}`);
+      throw new ServiceUnavailableException(
+        `Failed to count active stores: ${err?.message ?? err}`,
+      );
     }
 
-    const maxCalls = Math.max(RateLimitService.APP_HOURLY_BASE * activeUsers, RateLimitService.APP_HOURLY_BASE);
+    const maxCalls = Math.max(
+      RateLimitService.APP_HOURLY_BASE * activeUsers,
+      RateLimitService.APP_HOURLY_BASE,
+    );
     const bucketHour = new Date().toISOString().slice(0, 13);
     const key = `rate:app:hour:${bucketHour}`;
 
     const calls = await this.incrWithTtl(key, RateLimitService.APP_HOURLY_TTL);
     if (calls > maxCalls) {
-      throw new HttpException(`Limite horário do app excedido: ${calls}/${maxCalls}`, HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException(
+        `Application hourly limit exceeded: ${calls}/${maxCalls}`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
   }
 
@@ -93,11 +106,17 @@ export class RateLimitService implements OnModuleDestroy {
 
     const calls = await this.incrWithTtl(key, RateLimitService.LEADS_DAILY_TTL);
     if (calls > RateLimitService.LEADS_DAILY_LIMIT) {
-      throw new HttpException(`Leads Gen excedido: ${calls}/${RateLimitService.LEADS_DAILY_LIMIT} em 24h`, HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException(
+        `Leads Gen excedido: ${calls}/${RateLimitService.LEADS_DAILY_LIMIT} em 24h`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
   }
-  
-  async checkInstagramRateLimits(storeId: string, type: InstagramMsgType): Promise<void> {
+
+  async checkInstagramRateLimits(
+    storeId: string,
+    type: InstagramMsgType,
+  ): Promise<void> {
     let perSecondLimit: number;
     let perHourLimit: number | null;
 
@@ -115,22 +134,36 @@ export class RateLimitService implements OnModuleDestroy {
         perHourLimit = 750;
         break;
       default:
-        throw new ServiceUnavailableException(`Tipo de mensagem Instagram inválido: ${type}`);
+        throw new ServiceUnavailableException(
+          `Invalid Instagram message type: ${type}`,
+        );
     }
 
     const secBucket = Math.floor(Date.now() / 1000);
     const secKey = `rate:ig:${type}:store:${storeId}:sec:${secBucket}`;
-    const secCount = await this.incrWithTtl(secKey, RateLimitService.IG_SECOND_TTL);
+    const secCount = await this.incrWithTtl(
+      secKey,
+      RateLimitService.IG_SECOND_TTL,
+    );
     if (secCount > perSecondLimit) {
-      throw new HttpException(`Instagram ${type}: limite por segundo excedido`, HttpStatus.TOO_MANY_REQUESTS);
+      throw new HttpException(
+        `Instagram ${type}: limite por segundo excedido`,
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
     if (perHourLimit !== null) {
       const hourBucket = new Date().toISOString().slice(0, 13);
       const hrKey = `rate:ig:${type}:store:${storeId}:hour:${hourBucket}`;
-      const hrCount = await this.incrWithTtl(hrKey, RateLimitService.IG_HOURLY_TTL);
+      const hrCount = await this.incrWithTtl(
+        hrKey,
+        RateLimitService.IG_HOURLY_TTL,
+      );
       if (hrCount > perHourLimit) {
-        throw new HttpException(`Instagram ${type}: limite por hora excedido`, HttpStatus.TOO_MANY_REQUESTS);
+        throw new HttpException(
+          `Instagram ${type}: limite por hora excedido`,
+          HttpStatus.TOO_MANY_REQUESTS,
+        );
       }
     }
   }

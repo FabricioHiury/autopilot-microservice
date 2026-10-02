@@ -1,15 +1,13 @@
 import { createHmac } from 'crypto';
 import { InstagramDeleteDataPayload } from './instagram.interfaces';
-import { ErrorResponse } from 'src/base/exceptions/error.response.handler';
+import { ErrorResponse } from '../../base/exceptions/error.response.handler';
 
 function parseSignedRequest(signedRequest: string) {
   const [encodedSignature, payload] = signedRequest.split('.', 2);
 
   const receivedSignature = formatSignature(encodedSignature);
 
-  const data: InstagramDeleteDataPayload = JSON.parse(
-    decodeUrlBase64(payload),
-  );
+  const data: InstagramDeleteDataPayload = JSON.parse(decodeUrlBase64(payload));
 
   const calculatedSignature = generateSignature(payload);
 
@@ -45,7 +43,10 @@ function setTokenExpiration(expiresIn: number) {
   return tokenExpirationDate;
 }
 
-function validatePayloadSignature(rawPayload: Buffer | string | undefined, receivedSignature?: string) {
+function validatePayloadSignature(
+  rawPayload: Buffer | string | undefined,
+  receivedSignature?: string,
+) {
   if (!receivedSignature) {
     throw new ErrorResponse('Missing signature header', 401);
   }

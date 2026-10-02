@@ -13,14 +13,21 @@ export class AppInterceptor implements NestInterceptor {
     const request = context.switchToHttp().getRequest();
     const url = request.url;
 
-    if (url.startsWith('/instagram/webhooks') || url.startsWith('/facebook/webhooks') || url.startsWith('/webhook/whatsapp-official')) {
+    if (
+      url.startsWith('/instagram/webhooks') ||
+      url.startsWith('/facebook/webhooks') ||
+      url.startsWith('/webhook/whatsapp-official') ||
+      url.startsWith('/whatsapp/webhook/evolution') ||
+      url.startsWith('/olx/message/receive') ||
+      url.startsWith('/olx/lead/receive')
+    ) {
       return next.handle();
     }
 
     return next.handle().pipe(
       map((data) => {
         return {
-          message: 'Operação realizada com sucesso.',
+          message: 'Operation completed successfully.',
           statusCode: context.switchToHttp().getResponse().statusCode,
           data: data,
         };

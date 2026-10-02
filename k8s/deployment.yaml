@@ -1,0 +1,54 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: autopilot-micro
+  namespace: autopilot
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: autopilot-micro
+  template:
+    metadata:
+      labels:
+        app: autopilot-micro
+    spec:
+      terminationGracePeriodSeconds: 240
+      imagePullSecrets:
+        - name: docker-hub-secret
+      containers:
+        - name: autopilot-micro
+          image: nadice/autopilot-micro:latest
+          ports:
+            - containerPort: 3005
+              name: http
+          env:
+            - name: PORT
+              value: '3005'
+          envFrom:
+            - secretRef:
+                name: autopilot-micro-env
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 1000m
+              memory: 512Mi
+          startupProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 30
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 15
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: http
+            periodSeconds: 10
+            timeoutSeconds: 5

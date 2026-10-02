@@ -1,38 +1,26 @@
-FROM node:20-slim
-
-RUN apt-get update \
- && apt-get install -y --no-install-recommends \
-      chromium \
-      ca-certificates \
-      fonts-liberation \
-      libnss3 \
-      libatk1.0-0 \
-      libatk-bridge2.0-0 \
-      libx11-xcb1 \
-      libxcomposite1 \
-      libxdamage1 \
-      libxrandr2 \
-      libgbm1 \
-      libpango1.0-0 \
-      libxss1 \
-      libasound2 \
-      dumb-init \
- && rm -rf /var/lib/apt/lists/*
-
-ENV PUPPETEER_SKIP_CHROMIUM_DOWNLOAD=true \
-    PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium \
-    CHROME_BIN=/usr/bin/chromium \
-    NODE_OPTIONS="--max-old-space-size=6144"
-
+FROM node:22-alpine AS builder
 WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npx prisma generate && npm run build
+RUN apk add --no-cache openssl && corepack enable
+COPY package.json pnpm-lock.yaml ./
+RUN pnpm install --frozen-lockfile --ignore-scripts
+COPY prisma ./prisma
+RUN pnpm exec prisma generate
+COPY tsconfig*.json nest-cli.json ./
+COPY src ./src
+RUN pnpm run build
 
-RUN mkdir -p /app/.wwebjs_auth /app/.wwebjs_cache \
-    && chmod -R 755 /app
+FROM builder AS production-dependencies
+RUN pnpm prune --prod --ignore-scripts
 
+FROM node:22-alpine AS runner
+WORKDIR /app
+RUN apk add --no-cache openssl ffmpeg dumb-init && corepack enable
+ENV NODE_ENV=production PORT=3005
+COPY --from=builder --chown=node:node /app/package.json /app/pnpm-lock.yaml ./
+COPY --from=production-dependencies --chown=node:node /app/node_modules ./node_modules
+COPY --from=builder --chown=node:node /app/dist ./dist
+COPY --from=builder --chown=node:node /app/prisma ./prisma
+USER node
 EXPOSE 3005
 ENTRYPOINT ["dumb-init", "--"]
-CMD ["npm","run","start:prod"]
+CMD ["node", "dist/main.js"]

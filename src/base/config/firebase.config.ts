@@ -16,7 +16,20 @@ export interface FirebaseConfig {
 }
 
 export function getFirebaseConfig(): FirebaseConfig {
-  const filePath = resolve(process.cwd(), 'config/firebase.json');
+  if (
+    process.env.FIREBASE_PROJECT_ID &&
+    process.env.FIREBASE_CLIENT_EMAIL &&
+    process.env.FIREBASE_PRIVATE_KEY
+  ) {
+    return {
+      project_id: process.env.FIREBASE_PROJECT_ID,
+      client_email: process.env.FIREBASE_CLIENT_EMAIL,
+      private_key: process.env.FIREBASE_PRIVATE_KEY,
+    } as FirebaseConfig;
+  }
+  const filePath = resolve(
+    process.env.FIREBASE_CREDENTIALS_PATH || 'config/firebase.json',
+  );
 
   if (!existsSync(filePath)) {
     throw new Error('Firebase configuration file not found.');

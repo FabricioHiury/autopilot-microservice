@@ -10,9 +10,9 @@ describe('InstagramMessageOriginUtil', () => {
         reply_to: {
           story: {
             url: 'https://instagram.com/story/123',
-            id: 'story_123'
-          }
-        }
+            id: 'story_123',
+          },
+        },
       };
 
       const result = InstagramMessageOriginUtil.identifyMessageOrigin(message);
@@ -29,8 +29,8 @@ describe('InstagramMessageOriginUtil', () => {
         mid: 'test_mid',
         text: 'Resposta ao post',
         reply_to: {
-          mid: 'post_mid_123'
-        }
+          mid: 'post_mid_123',
+        },
       };
 
       const result = InstagramMessageOriginUtil.identifyMessageOrigin(message);
@@ -41,15 +41,15 @@ describe('InstagramMessageOriginUtil', () => {
       expect(result.storyUrl).toBeUndefined();
     });
 
-    it('deve identificar mensagem de referral', () => {
+    it('deve identificar text de referral', () => {
       const message = {
         mid: 'test_mid',
         text: 'Mensagem via referral',
         referral: {
           source: 'ADS',
           type: 'OPEN_THREAD',
-          ref: 'campaign_123'
-        }
+          ref: 'campaign_123',
+        },
       };
 
       const result = InstagramMessageOriginUtil.identifyMessageOrigin(message);
@@ -60,10 +60,10 @@ describe('InstagramMessageOriginUtil', () => {
       expect(result.referralRef).toBe('campaign_123');
     });
 
-    it('deve identificar mensagem direta', () => {
+    it('deve identificar text direta', () => {
       const message = {
         mid: 'test_mid',
-        text: 'Mensagem direta'
+        text: 'Mensagem direta',
       };
 
       const result = InstagramMessageOriginUtil.identifyMessageOrigin(message);
@@ -82,9 +82,9 @@ describe('InstagramMessageOriginUtil', () => {
           mid: 'post_mid_123',
           story: {
             url: 'https://instagram.com/story/123',
-            id: 'story_123'
-          }
-        }
+            id: 'story_123',
+          },
+        },
       };
 
       const result = InstagramMessageOriginUtil.identifyMessageOrigin(message);
@@ -99,52 +99,56 @@ describe('InstagramMessageOriginUtil', () => {
       const messageOrigin = {
         origin: InstagramMessageOriginEnum.STORY_REPLY,
         storyId: 'story_123',
-        storyUrl: 'https://instagram.com/story/123'
+        storyUrl: 'https://instagram.com/story/123',
       };
 
-      const description = InstagramMessageOriginUtil.getOriginDescription(messageOrigin);
+      const description =
+        InstagramMessageOriginUtil.getOriginDescription(messageOrigin);
 
-      expect(description).toBe('Resposta ao Story (ID: story_123)');
+      expect(description).toBe('Story reply (ID: story_123)');
     });
 
     it('deve retornar descrição para post reply', () => {
       const messageOrigin = {
         origin: InstagramMessageOriginEnum.POST_REPLY,
-        postId: 'post_123'
+        postId: 'post_123',
       };
 
-      const description = InstagramMessageOriginUtil.getOriginDescription(messageOrigin);
+      const description =
+        InstagramMessageOriginUtil.getOriginDescription(messageOrigin);
 
-      expect(description).toBe('Resposta ao Post (ID: post_123)');
+      expect(description).toBe('Post reply (ID: post_123)');
     });
 
     it('deve retornar descrição para referral', () => {
       const messageOrigin = {
         origin: InstagramMessageOriginEnum.REFERRAL,
         referralSource: 'ADS',
-        referralRef: 'campaign_123'
+        referralRef: 'campaign_123',
       };
 
-      const description = InstagramMessageOriginUtil.getOriginDescription(messageOrigin);
+      const description =
+        InstagramMessageOriginUtil.getOriginDescription(messageOrigin);
 
-      expect(description).toBe('Link de Referência (ADS) - Ref: campaign_123');
+      expect(description).toBe('Referral link (ADS) - Ref: campaign_123');
     });
 
-    it('deve retornar descrição para mensagem direta', () => {
+    it('deve retornar descrição para text direta', () => {
       const messageOrigin = {
-        origin: InstagramMessageOriginEnum.DIRECT_MESSAGE
+        origin: InstagramMessageOriginEnum.DIRECT_MESSAGE,
       };
 
-      const description = InstagramMessageOriginUtil.getOriginDescription(messageOrigin);
+      const description =
+        InstagramMessageOriginUtil.getOriginDescription(messageOrigin);
 
-      expect(description).toBe('Mensagem Direta');
+      expect(description).toBe('Direct message');
     });
   });
 
   describe('isContentReply', () => {
     it('deve retornar true para story reply', () => {
       const messageOrigin = {
-        origin: InstagramMessageOriginEnum.STORY_REPLY
+        origin: InstagramMessageOriginEnum.STORY_REPLY,
       };
 
       const result = InstagramMessageOriginUtil.isContentReply(messageOrigin);
@@ -154,7 +158,7 @@ describe('InstagramMessageOriginUtil', () => {
 
     it('deve retornar true para post reply', () => {
       const messageOrigin = {
-        origin: InstagramMessageOriginEnum.POST_REPLY
+        origin: InstagramMessageOriginEnum.POST_REPLY,
       };
 
       const result = InstagramMessageOriginUtil.isContentReply(messageOrigin);
@@ -164,7 +168,7 @@ describe('InstagramMessageOriginUtil', () => {
 
     it('deve retornar false para referral', () => {
       const messageOrigin = {
-        origin: InstagramMessageOriginEnum.REFERRAL
+        origin: InstagramMessageOriginEnum.REFERRAL,
       };
 
       const result = InstagramMessageOriginUtil.isContentReply(messageOrigin);
@@ -172,9 +176,9 @@ describe('InstagramMessageOriginUtil', () => {
       expect(result).toBe(false);
     });
 
-    it('deve retornar false para mensagem direta', () => {
+    it('deve retornar false para text direta', () => {
       const messageOrigin = {
-        origin: InstagramMessageOriginEnum.DIRECT_MESSAGE
+        origin: InstagramMessageOriginEnum.DIRECT_MESSAGE,
       };
 
       const result = InstagramMessageOriginUtil.isContentReply(messageOrigin);
@@ -186,7 +190,7 @@ describe('InstagramMessageOriginUtil', () => {
   describe('isFromReferral', () => {
     it('deve retornar true para referral', () => {
       const messageOrigin = {
-        origin: InstagramMessageOriginEnum.REFERRAL
+        origin: InstagramMessageOriginEnum.REFERRAL,
       };
 
       const result = InstagramMessageOriginUtil.isFromReferral(messageOrigin);
@@ -196,7 +200,7 @@ describe('InstagramMessageOriginUtil', () => {
 
     it('deve retornar false para outros tipos', () => {
       const messageOrigin = {
-        origin: InstagramMessageOriginEnum.STORY_REPLY
+        origin: InstagramMessageOriginEnum.STORY_REPLY,
       };
 
       const result = InstagramMessageOriginUtil.isFromReferral(messageOrigin);
@@ -212,16 +216,15 @@ describe('InstagramMessageOriginUtil', () => {
         text: 'Interesse no produto',
         referral: {
           product: {
-            id: 'product_789'
+            id: 'product_789',
           },
           source: 'SHORTLINK',
-          type: 'OPEN_THREAD'
-        }
+          type: 'OPEN_THREAD',
+        },
       };
 
       const result = InstagramMessageOriginUtil.identifyMessageOrigin(message);
 
-      // Quando há product.id, a lógica atual classifica como POST_REPLY
       expect(result.origin).toBe(InstagramMessageOriginEnum.POST_REPLY);
       expect(result.referralSource).toBe('SHORTLINK');
       expect(result.postId).toBe('product_789');
@@ -232,8 +235,8 @@ describe('InstagramMessageOriginUtil', () => {
         mid: 'test_mid',
         text: 'Sim',
         quick_reply: {
-          payload: 'YES_PAYLOAD'
-        }
+          payload: 'YES_PAYLOAD',
+        },
       };
 
       const result = InstagramMessageOriginUtil.identifyMessageOrigin(message);
@@ -241,9 +244,9 @@ describe('InstagramMessageOriginUtil', () => {
       expect(result.origin).toBe(InstagramMessageOriginEnum.DIRECT_MESSAGE);
     });
 
-    it('deve lidar com mensagem vazia', () => {
+    it('deve lidar com text vazia', () => {
       const message = {
-        mid: 'test_mid'
+        mid: 'test_mid',
       };
 
       const result = InstagramMessageOriginUtil.identifyMessageOrigin(message);

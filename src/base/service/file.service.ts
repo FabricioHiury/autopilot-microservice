@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ErrorResponse } from 'src/base/exceptions/error.response.handler';
+import { ErrorResponse } from '../exceptions/error.response.handler';
 import { FirebaseService } from './firebase.service';
 
 interface FileRecord {
@@ -62,9 +62,7 @@ export class FileService {
     'text/csv',
   ]);
 
-  constructor(
-    private readonly firebaseService: FirebaseService,
-  ) { }
+  constructor(private readonly firebaseService: FirebaseService) {}
 
   private addDays(base: Date, days: number): Date {
     const d = new Date(base);
@@ -91,7 +89,10 @@ export class FileService {
 
   private ensureAllowedMime(mime: string): void {
     if (!FileService.ALLOWED_MIME.has(mime)) {
-      throw new ErrorResponse(`Invalid file type. Accepted: ${Array.from(FileService.ALLOWED_MIME).join(', ')}`, 400);
+      throw new ErrorResponse(
+        `Invalid file type. Accepted: ${Array.from(FileService.ALLOWED_MIME).join(', ')}`,
+        400,
+      );
     }
   }
 
@@ -101,7 +102,12 @@ export class FileService {
     return idx >= 0 ? name.slice(idx + 1) : '';
   }
 
-  private buildObjectKey(params: { userId: string; entity: string; entityId: string; extension?: string }): string {
+  private buildObjectKey(params: {
+    userId: string;
+    entity: string;
+    entityId: string;
+    extension?: string;
+  }): string {
     const { userId, entity, entityId, extension } = params;
     const ext = extension ? `.${extension.toLowerCase()}` : '';
     const rand = Math.random().toString(36).slice(2, 8);
@@ -145,7 +151,14 @@ export class FileService {
   }
 
   async saveFileStructured(params: FileRecord): Promise<FileRecord> {
-    const { file, storeId, channel, externalClientId, fileCategory, preferredFileName } = params;
+    const {
+      file,
+      storeId,
+      channel,
+      externalClientId,
+      fileCategory,
+      preferredFileName,
+    } = params;
 
     if (!file) throw new ErrorResponse('No file was uploaded.', 400);
 
@@ -154,13 +167,19 @@ export class FileService {
 
     const extension = this.extensionFromName(file.originalname);
     const category = fileCategory || this.determineCategoryFromMime(mime);
-    const fileName = preferredFileName || `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${extension ? '.' + extension : ''}`;
+    const fileName =
+      preferredFileName ||
+      `${Date.now()}-${Math.random().toString(36).slice(2, 8)}${extension ? '.' + extension : ''}`;
     const objectKey = `${storeId}/${channel}/${externalClientId}/${category}/${fileName}`;
 
     let uploadedUrl: string | null = null;
     try {
       const buffer = file.buffer;
-      const [, url] = await this.firebaseService.uploadBufferToPath(buffer, mime, objectKey);
+      const [, url] = await this.firebaseService.uploadBufferToPath(
+        buffer,
+        mime,
+        objectKey,
+      );
       uploadedUrl = url;
 
       const expirationDate = this.computeUrlExpiration();
@@ -177,15 +196,22 @@ export class FileService {
       return record;
     } catch (err) {
       if (uploadedUrl) {
-        try { await this.firebaseService.deleteFile(objectKey); } catch { }
+        try {
+          await this.firebaseService.deleteFile(objectKey);
+        } catch {}
       }
       if (err instanceof ErrorResponse) throw err;
       throw new ErrorResponse('Error saving file.', 500);
     }
   }
 
-  private async uploadWithKey(file: Express.Multer.File, key: string): Promise<[string, string]> {
-    return this.firebaseService.uploadFile(Object.assign({}, file, { originalname: key }));
+  private async uploadWithKey(
+    file: Express.Multer.File,
+    key: string,
+  ): Promise<[string, string]> {
+    return this.firebaseService.uploadFile(
+      Object.assign({}, file, { originalname: key }),
+    );
   }
 
   async saveFile(params: SaveFileParams): Promise<FileRecord> {
@@ -197,7 +223,12 @@ export class FileService {
     this.ensureAllowedMime(mime);
 
     const extension = this.extensionFromName(file.originalname);
-    const objectKey = this.buildObjectKey({ userId, entity, entityId, extension });
+    const objectKey = this.buildObjectKey({
+      userId,
+      entity,
+      entityId,
+      extension,
+    });
 
     let uploadedKey: string | null = null;
     let uploadedUrl: string | null = null;
@@ -247,7 +278,10 @@ export class FileService {
       await this.firebaseService.deleteFile(fileId);
     } catch (err) {
       errors.push('Storage delete failed');
-      this.logger.error('Error deleting file from storage', err instanceof Error ? err.stack : undefined);
+      this.logger.error(
+        'Error deleting file from storage',
+        err instanceof Error ? err.stack : undefined,
+      );
     }
 
     if (errors.length) {

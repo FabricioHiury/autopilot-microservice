@@ -1,6 +1,7 @@
-import { IsString, IsNotEmpty } from 'class-validator';
+import { IsString, IsNotEmpty, IsOptional, IsObject } from 'class-validator';
 
 export class OlxReceiveMessageDto {
+  @IsOptional() @IsObject() adsInfo?: Record<string, unknown>;
   @IsString()
   @IsNotEmpty()
   chatId: string;

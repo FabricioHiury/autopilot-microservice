@@ -1,5 +1,5 @@
 import { createHmac } from 'crypto';
-import { ErrorResponse } from 'src/base/exceptions/error.response.handler';
+import { ErrorResponse } from '../../base/exceptions/error.response.handler';
 import { FacebookDeleteDataPayload } from './facebook.interfaces';
 
 /**
@@ -10,9 +10,7 @@ function parseSignedRequest(signedRequest: string) {
 
   const receivedSignature = formatSignature(encodedSignature);
 
-  const data: FacebookDeleteDataPayload = JSON.parse(
-    decodeUrlBase64(payload),
-  );
+  const data: FacebookDeleteDataPayload = JSON.parse(decodeUrlBase64(payload));
 
   const calculatedSignature = generateSignature(payload);
 

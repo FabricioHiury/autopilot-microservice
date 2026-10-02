@@ -10,13 +10,13 @@ import {
   IsString,
   ValidateNested,
 } from 'class-validator';
-import { IntegrationsEnum } from 'src/core/integrations/enum/integrations.enum';
-import { MessageTypeEnum } from 'src/core/integrations/enum/message-type.enum';
+import { IntegrationsEnum } from '../../integrations/enum/integrations.enum';
+import { MessageTypeEnum } from '../../integrations/enum/message-type.enum';
 
-class MetadadosMensagemDto {
+export class MessageMetadataDto {
   @IsString()
   @IsOptional()
-  nome?: string;
+  name?: string;
 
   @IsString()
   @IsOptional()
@@ -28,23 +28,23 @@ class MetadadosMensagemDto {
 
   @IsString()
   @IsOptional()
-  celular?: string;
+  phone?: string;
 
   @IsString()
   @IsOptional()
-  urlAvatar?: string;
+  avatarUrl?: string;
 
   @IsString()
   @IsOptional()
-  idAnuncioExterno?: string;
+  externalAdId?: string;
 
   @IsString()
   @IsOptional()
-  origemMensagem?: string;
+  source?: string;
 
   @IsString()
   @IsOptional()
-  detalhesOrigem?: string;
+  sourceDetails?: string;
 
   @IsBoolean()
   @IsOptional()
@@ -55,7 +55,7 @@ class MetadadosMensagemDto {
   isFromReferral?: boolean;
 }
 
-export class ContatoDto {
+export class ContactDto {
   @IsString()
   @IsNotEmpty()
   name: string;
@@ -98,63 +98,63 @@ export class CallDto {
 
   @IsDateString()
   @IsNotEmpty()
-  timestamp: Date;
+  timestamp: Date | string;
 }
 
-export class ChatOutgoingMessageDto {
-  @IsNumber()
+export class ProviderMessageEvent {
+  @IsString()
   @IsNotEmpty()
   storeId: string;
 
   @IsString()
   @IsOptional()
-  mensagem?: string;
+  text?: string;
 
   @IsString()
   @IsOptional()
-  anexoMensagem?: string;
+  attachmentUrl?: string;
 
   @IsString()
   @IsOptional()
-  tipoAnexo?: string;
+  attachmentType?: string;
 
   @IsString()
   @IsOptional()
-  idMensagem?: string;
+  messageId?: string;
 
   @IsString()
   @IsOptional()
-  mensagemReferencia?: string;
+  quotedMessageId?: string;
 
   @IsEnum(IntegrationsEnum)
   @IsNotEmpty()
-  canal: IntegrationsEnum;
+  channel: IntegrationsEnum;
 
   @IsBoolean()
   @IsOptional()
-  enviadaLoja?: boolean;
+  sentByStore?: boolean;
 
   @IsString()
   @IsNotEmpty()
-  idDestinatarioApiExterna: string;
+  externalContactId: string;
 
   @IsEnum(MessageTypeEnum)
   @IsOptional()
-  tipo?: MessageTypeEnum;
+  type?: MessageTypeEnum;
 
   @IsDateString()
   @IsNotEmpty()
-  timestamp: Date;
+  timestamp: Date | string;
 
   @IsOptional()
-  @Type(() => MetadadosMensagemDto)
-  metadados?: MetadadosMensagemDto;
+  @Type(() => MessageMetadataDto)
+  metadata?: MessageMetadataDto;
 
   @IsArray()
   @ValidateNested({ each: true })
-  @Type(() => ContatoDto)
+  @Type(() => ContactDto)
   @IsOptional()
-  contatos?: ContatoDto[];
+  contacts?: ContactDto[];
 
   @ValidateNested()
   @Type(() => LocationDto)

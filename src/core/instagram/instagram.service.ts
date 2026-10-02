@@ -1,6 +1,7 @@
+import { deliverMetaStatuses } from '../delivery/meta-status.utils';
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from 'src/base/service/prisma.service';
-import { ErrorResponse } from 'src/base/exceptions/error.response.handler';
+import { PrismaService } from '../../base/service/prisma.service';
+import { ErrorResponse } from '../../base/exceptions/error.response.handler';
 import { uuidv7 } from 'uuidv7';
 import {
   InstagramUserDataResponse,
@@ -12,25 +13,28 @@ import {
   InstagramUserResponse,
 } from './instagram.interfaces';
 import axios from 'axios';
-import { MessageTypeEnum } from 'src/core/integrations/enum/message-type.enum';
+import { MessageTypeEnum } from '../integrations/enum/message-type.enum';
 import { stringify } from 'querystring';
 import { EventEmitter2 } from '@nestjs/event-emitter';
-import { ChatOutgoingMessageDto } from 'src/core/comunication/dto/outgoing-message.dto';
-import { IntegrationsEnum } from 'src/core/integrations/enum/integrations.enum';
-import { ChatIncomingMessageDto } from 'src/core/comunication/dto/incoming-message.dto';
-import { IntegrationStatusDto } from 'src/core/integrations/dto/integrations-status.dto';
+import { ProviderMessageEvent } from '../communication/dto/outgoing-message.dto';
+import { IntegrationsEnum } from '../integrations/enum/integrations.enum';
+import { SendMessageDto } from '../communication/dto/incoming-message.dto';
+import { IntegrationStatusDto } from '../integrations/dto/integrations-status.dto';
 import { instagramUtils } from './instagram.utils';
 import { randomBytes, createHash } from 'crypto';
 import { ConfigureWebhooksDto } from './dto/configure-webhooks.dto';
 import {
   IntegrationsStatusEnum,
   IntegrationsStatusErrorMessageEnum,
-} from 'src/core/integrations/enum/integrations-status.enum';
-import { RateLimitService } from 'src/base/service/rate-limit.service';
-import { FirebaseService } from 'src/base/service/firebase.service';
+} from '../integrations/enum/integrations-status.enum';
+import { RateLimitService } from '../../base/service/rate-limit.service';
+import { FirebaseService } from '../../base/service/firebase.service';
 import { Logger } from '@nestjs/common';
 import { InstagramMessageOriginUtil } from './utils/message-origin.util';
-import { InstagramMessageOriginDetails, InstagramMessageOriginEnum } from './enum/instagram-message-origin.enum';
+import {
+  InstagramMessageOriginDetails,
+  InstagramMessageOriginEnum,
+} from './enum/instagram-message-origin.enum';
 
 @Injectable()
 export class InstagramService {
@@ -38,7 +42,8 @@ export class InstagramService {
   private readonly instagramAuthUrl: string;
   private readonly redirectUri: string;
   private readonly instagramGraphUrl: string;
-  private readonly facebookGraphUrl: string = 'https://graph.facebook.com/v24.0';
+  private readonly facebookGraphUrl: string =
+    'https://graph.facebook.com/v24.0';
 
   constructor(
     private readonly prismaService: PrismaService,
@@ -55,24 +60,39 @@ export class InstagramService {
     instancePrefix: string,
     senderId: string,
     externalUrl?: string,
-    lastSavedUrl?: string | null
+    lastSavedUrl?: string | null,
   ): Promise<string | null> {
     if (!externalUrl) return lastSavedUrl ?? null;
     try {
-      const response = await axios.get<ArrayBuffer>(externalUrl, { responseType: 'arraybuffer', timeout: 20000 });
+      const response = await axios.get<ArrayBuffer>(externalUrl, {
+        responseType: 'arraybuffer',
+        timeout: 20000,
+      });
       const buffer = Buffer.from(response.data);
-      const contentType = response.headers['content-type'] || 'image/jpeg';
-      const hash = createHash('sha256').update(new Uint8Array(buffer)).digest('hex').slice(0, 12);
+      const contentType = String(
+        response.headers['content-type'] || 'image/jpeg',
+      );
+      const hash = createHash('sha256')
+        .update(new Uint8Array(buffer))
+        .digest('hex')
+        .slice(0, 12);
 
       if (lastSavedUrl && lastSavedUrl.includes(`-${hash}`)) {
         return lastSavedUrl;
       }
 
       const path = `${instancePrefix}/profile/${senderId}-${hash}`;
-      const [, signedUrl] = await this.firebaseService.uploadBufferToPath(buffer, contentType, path);
+      const [, signedUrl] = await this.firebaseService.uploadBufferToPath(
+        buffer,
+        contentType,
+        path,
+      );
       return signedUrl;
     } catch (error) {
-      this.logger.warn('Failed to upload Instagram avatar:', (error as any)?.message);
+      this.logger.warn(
+        'Failed to upload Instagram avatar:',
+        (error as any)?.message,
+      );
       return lastSavedUrl ?? externalUrl ?? null;
     }
   }
@@ -102,11 +122,17 @@ export class InstagramService {
     });
 
     if (!store) {
-      throw new ErrorResponse('Store not found. You need to integrate with Instagram before trying to send messages.', 404);
+      throw new ErrorResponse(
+        'Store not found. You need to integrate with Instagram before trying to send messages.',
+        404,
+      );
     }
 
     if (!store.token) {
-      throw new ErrorResponse('Long-lived token not found, you need to authorize the Instagram integration before accessing this route.', 401);
+      throw new ErrorResponse(
+        'Long-lived token not found, you need to authorize the Instagram integration before accessing this route.',
+        401,
+      );
     }
 
     return store;
@@ -164,7 +190,10 @@ export class InstagramService {
 
       return data.access_token;
     } catch (error) {
-      throw new ErrorResponse(`Error exchanging access code for token: ${error?.message}`, 500);
+      throw new ErrorResponse(
+        `Error exchanging access code for token: ${error?.message}`,
+        500,
+      );
     }
   }
 
@@ -193,7 +222,10 @@ export class InstagramService {
     } catch (error) {
       this.logger.error('IG EXCHANGE PARAMS:', params);
       this.logger.error('IG EXCHANGE ERROR BODY:', error.response?.data);
-      throw new ErrorResponse(`Error exchanging access token for long-lived token: ${error.response?.data?.error?.message || error.message}`, 500);
+      throw new ErrorResponse(
+        `Error exchanging access token for long-lived token: ${error.response?.data?.error?.message || error.message}`,
+        500,
+      );
     }
   }
 
@@ -218,14 +250,20 @@ export class InstagramService {
 
       return String(data.user_id);
     } catch (error) {
-      throw new ErrorResponse(`Error getting user's external ID: ${error?.message}`, 500);
+      throw new ErrorResponse(
+        `Error getting user's external ID: ${error?.message}`,
+        500,
+      );
     }
   }
 
   /**
    * Activate webhook for receiving messages
    */
-  private async activateMessageReceivingWebhook(externalUserId: string, token: string): Promise<void> {
+  private async activateMessageReceivingWebhook(
+    externalUserId: string,
+    token: string,
+  ): Promise<void> {
     const body = stringify({
       subscribed_fields: 'messages',
       access_token: token,
@@ -242,7 +280,10 @@ export class InstagramService {
         },
       );
     } catch (error) {
-      throw new ErrorResponse(`Error configuring message reception: ${error?.message}`, 500);
+      throw new ErrorResponse(
+        `Error configuring message reception: ${error?.message}`,
+        500,
+      );
     }
   }
 
@@ -277,16 +318,24 @@ export class InstagramService {
       const errorMessage = errorData?.message;
 
       if (status === 400) {
-        this.logger.warn(`[INSTAGRAM] Failed to get sender data for ${instagramSenderId}:`, {
-          message,
-          errorCode,
-          errorSubcode,
-          errorMessage,
-        });
+        this.logger.warn(
+          `[INSTAGRAM] Failed to get sender data for ${instagramSenderId}:`,
+          {
+            message,
+            errorCode,
+            errorSubcode,
+            errorMessage,
+          },
+        );
         return { name: undefined, username: undefined, profile_pic: undefined };
       } else {
-        this.logger.error(`[INSTAGRAM] Error getting sender data for ${instagramSenderId}: ${message}`);
-        throw new ErrorResponse(`Error getting Instagram message sender data: ${message}`, 500);
+        this.logger.error(
+          `[INSTAGRAM] Error getting sender data for ${instagramSenderId}: ${message}`,
+        );
+        throw new ErrorResponse(
+          `Error getting Instagram message sender data: ${message}`,
+          500,
+        );
       }
     }
   }
@@ -294,7 +343,10 @@ export class InstagramService {
   /**
    * Get media URL from Instagram post/reel
    */
-  private async getMediaUrl(mediaId: string, storeToken: string): Promise<string | null> {
+  private async getMediaUrl(
+    mediaId: string,
+    storeToken: string,
+  ): Promise<string | null> {
     const params = {
       fields: 'media_url,media_type,thumbnail_url',
       access_token: storeToken,
@@ -305,15 +357,15 @@ export class InstagramService {
         media_url?: string;
         media_type?: string;
         thumbnail_url?: string;
-      }>(
-        `${this.instagramGraphUrl}/${mediaId}`,
-        { params, timeout: 10000 },
-      );
+      }>(`${this.instagramGraphUrl}/${mediaId}`, { params, timeout: 10000 });
 
       // For videos, prefer media_url, but fallback to thumbnail if not available
       return data.media_url || data.thumbnail_url || null;
     } catch (error) {
-      this.logger.warn(`Failed to fetch media URL for ${mediaId}:`, error?.message);
+      this.logger.warn(
+        `Failed to fetch media URL for ${mediaId}:`,
+        error?.message,
+      );
       return null;
     }
   }
@@ -322,8 +374,10 @@ export class InstagramService {
    * Get authentication URL for Instagram
    */
   async getAuthenticationUrl(uniqueId: string): Promise<string> {
-    this.logger.debug(`[getAuthenticationUrl] Starting with uniqueId: ${uniqueId}`);
-    
+    this.logger.debug(
+      `[getAuthenticationUrl] Starting with uniqueId: ${uniqueId}`,
+    );
+
     const scope = 'instagram_business_basic,instagram_business_manage_messages';
     const forceAuthentication = '1';
     const enableFbLogin = '0';
@@ -335,7 +389,7 @@ export class InstagramService {
       instagramAuthUrl: this.instagramAuthUrl,
       redirectUri: this.redirectUri,
       clientId: clientId ? '***' + clientId.slice(-4) : 'NOT_SET',
-      appBaseUrl: process.env.APP_BASE_URL
+      appBaseUrl: process.env.APP_BASE_URL,
     });
 
     const store = await this.prismaService.instagramAuthData.findUnique({
@@ -361,7 +415,9 @@ export class InstagramService {
 
     const finalUrl = url.toString();
     this.logger.debug(`[getAuthenticationUrl] Final URL: ${finalUrl}`);
-    this.logger.debug(`[getAuthenticationUrl] redirect_uri param: ${this.redirectUri}`);
+    this.logger.debug(
+      `[getAuthenticationUrl] redirect_uri param: ${this.redirectUri}`,
+    );
 
     return finalUrl;
   }
@@ -394,7 +450,10 @@ export class InstagramService {
 
       return this.getAuthenticationUrl(uniqueId);
     } catch (error) {
-      throw new ErrorResponse(`Error saving Instagram client: ${error?.message}`, 500);
+      throw new ErrorResponse(
+        `Error saving Instagram client: ${error?.message}`,
+        500,
+      );
     }
   }
 
@@ -405,7 +464,7 @@ export class InstagramService {
     if (!code || !uniqueId) {
       throw new ErrorResponse(
         'Instagram integration not authorized by the store.',
-        400
+        400,
       );
     }
 
@@ -414,12 +473,16 @@ export class InstagramService {
     });
 
     if (!store) {
-      throw new ErrorResponse('Store not found, you need to save Instagram integration data before accessing this route.', 404);
+      throw new ErrorResponse(
+        'Store not found, you need to save Instagram integration data before accessing this route.',
+        404,
+      );
     }
 
     const shortLivedToken = await this.getShortLivedToken(code, uniqueId);
 
-    const { longLivedToken, longLivedTokenExpiresAt } = await this.getLongLivedToken(shortLivedToken);
+    const { longLivedToken, longLivedTokenExpiresAt } =
+      await this.getLongLivedToken(shortLivedToken);
 
     const instagramGlobalId = await this.getInstagramStoreId(longLivedToken);
 
@@ -436,11 +499,6 @@ export class InstagramService {
       instagramGlobalId,
       longLivedToken,
     );
-
-    this.eventEmitter.emit('integration.success', {
-      storeId: store.storeId,
-      plataforma: IntegrationsEnum.INSTAGRAM,
-    });
 
     return `Instagram integration successfully authorized. You can now send and receive messages!`;
   }
@@ -461,7 +519,10 @@ export class InstagramService {
     };
 
     try {
-      const { data } = await axios.get<InstagramLongLivedTokenResponse>(`${this.instagramGraphUrl}/refresh_access_token`, { params });
+      const { data } = await axios.get<InstagramLongLivedTokenResponse>(
+        `${this.instagramGraphUrl}/refresh_access_token`,
+        { params },
+      );
 
       await this.prismaService.instagramAuthData.update({
         where: { storeId: storeId },
@@ -471,14 +532,21 @@ export class InstagramService {
         },
       });
     } catch (error) {
-      throw new ErrorResponse(`Error refreshing long-lived token: ${error?.message}`, 500);
+      throw new ErrorResponse(
+        `Error refreshing long-lived token: ${error?.message}`,
+        500,
+      );
     }
   }
 
   /**
    * Receive message from Instagram
    */
-  async receiveMessage(payload: InstagramPayload, signature: string, body: Buffer): Promise<void> {
+  async receiveMessage(
+    payload: InstagramPayload,
+    signature: string,
+    body: Buffer,
+  ): Promise<void> {
     instagramUtils.validatePayloadSignature(body, signature);
 
     if (!payload.entry || payload.entry.length === 0) {
@@ -489,39 +557,37 @@ export class InstagramService {
       const storeAuth = await this.findStoreAuthByInstagramId(entry.id);
 
       for (const message of entry.messaging) {
+        await deliverMetaStatuses(
+          this.prismaService,
+          this.eventEmitter,
+          storeAuth.storeId,
+          'instagram',
+          message,
+        );
         if (!message.message) {
           continue;
         }
 
         const isEcho = Boolean(message.message.is_echo);
         const counterpartId = isEcho ? message.recipient.id : message.sender.id;
-        
-        if (isEcho && message.message.text?.match(/^\*[^*]+\*:\n/)) {
-          this.logger.log('[INSTAGRAM RECEIVE] Echo message with name prefix detected, emitting success event only:', {
-            messageId: message.message.mid,
-            textPreview: message.message.text?.substring(0, 50),
-          });
-          
-          this.eventEmitter.emit('integration.success', {
-            storeId: storeAuth.storeId,
-            plataforma: IntegrationsEnum.INSTAGRAM,
-            idMensagemExterna: message.message.mid
-          });
-          continue;
-        }
-        
+
         let name: string | null = null;
         let username: string | null = null;
         let profile_pic: string | null = null;
         try {
-          const senderData = await this.getSenderData(counterpartId, storeAuth.token);
+          const senderData = await this.getSenderData(
+            counterpartId,
+            storeAuth.token,
+          );
           name = senderData.name || null;
           username = senderData.username || null;
           profile_pic = senderData.profile_pic || null;
         } catch (error: any) {
-          this.logger.warn(`[INSTAGRAM RECEIVE] Failed to get sender data for ${counterpartId}: ${error?.message}`);
+          this.logger.warn(
+            `[INSTAGRAM RECEIVE] Failed to get sender data for ${counterpartId}: ${error?.message}`,
+          );
         }
-        
+
         const firstAttachment = message.message.attachments?.[0];
         let attachmentUrl = firstAttachment?.payload?.url || undefined;
         let attachmentMimeType: string | undefined;
@@ -530,8 +596,10 @@ export class InstagramService {
         const reportedType = firstAttachment?.type?.toLowerCase();
         const urlLower = (attachmentUrl || '').toLowerCase();
 
-        const messageOrigin: InstagramMessageOriginDetails = InstagramMessageOriginUtil.identifyMessageOrigin(message.message);
-        const originDescription = InstagramMessageOriginUtil.getOriginDescription(messageOrigin);
+        const messageOrigin: InstagramMessageOriginDetails =
+          InstagramMessageOriginUtil.identifyMessageOrigin(message.message);
+        const originDescription =
+          InstagramMessageOriginUtil.getOriginDescription(messageOrigin);
 
         if (firstAttachment) {
           switch (reportedType) {
@@ -540,9 +608,10 @@ export class InstagramService {
               attachmentMimeType = 'image/jpeg';
               break;
             case 'video':
-              resolvedType = messageOrigin.origin === InstagramMessageOriginEnum.REEL_REPLY 
-                ? MessageTypeEnum.REEL 
-                : MessageTypeEnum.VIDEO;
+              resolvedType =
+                messageOrigin.origin === InstagramMessageOriginEnum.REEL_REPLY
+                  ? MessageTypeEnum.REEL
+                  : MessageTypeEnum.VIDEO;
               attachmentMimeType = 'video/mp4';
               break;
             case 'audio':
@@ -575,40 +644,59 @@ export class InstagramService {
               resolvedType = MessageTypeEnum.UNKNOWN;
           }
 
-          if (resolvedType === MessageTypeEnum.UNKNOWN || resolvedType === MessageTypeEnum.DOCUMENT || resolvedType === MessageTypeEnum.IMAGE || resolvedType === MessageTypeEnum.VIDEO) {
+          if (
+            resolvedType === MessageTypeEnum.UNKNOWN ||
+            resolvedType === MessageTypeEnum.DOCUMENT ||
+            resolvedType === MessageTypeEnum.IMAGE ||
+            resolvedType === MessageTypeEnum.VIDEO
+          ) {
             const beforeRefinement = resolvedType;
-            if (/\.(gif)(\?|$)/i.test(urlLower) || /giphy\.com/i.test(urlLower)) {
+            if (
+              /\.(gif)(\?|$)/i.test(urlLower) ||
+              /giphy\.com/i.test(urlLower)
+            ) {
               resolvedType = MessageTypeEnum.STICKER;
               attachmentMimeType = 'image/gif';
             } else if (/\.(mp3|wav|m4a|aac|oga)(\?|$)/i.test(urlLower)) {
               resolvedType = MessageTypeEnum.AUDIO;
               if (!attachmentMimeType) {
-                if (/\.mp3(\?|$)/i.test(urlLower)) attachmentMimeType = 'audio/mpeg';
-                else if (/\.m4a(\?|$)/i.test(urlLower)) attachmentMimeType = 'audio/m4a';
-                else if (/\.aac(\?|$)/i.test(urlLower)) attachmentMimeType = 'audio/aac';
+                if (/\.mp3(\?|$)/i.test(urlLower))
+                  attachmentMimeType = 'audio/mpeg';
+                else if (/\.m4a(\?|$)/i.test(urlLower))
+                  attachmentMimeType = 'audio/m4a';
+                else if (/\.aac(\?|$)/i.test(urlLower))
+                  attachmentMimeType = 'audio/aac';
                 else attachmentMimeType = 'audio/mp4';
               }
             } else if (/\.(mp4|mov|mkv|webm)(\?|$)/i.test(urlLower)) {
-              if (messageOrigin.origin === InstagramMessageOriginEnum.REEL_REPLY) {
+              if (
+                messageOrigin.origin === InstagramMessageOriginEnum.REEL_REPLY
+              ) {
                 resolvedType = MessageTypeEnum.REEL;
                 attachmentMimeType = 'video/mp4';
               } else {
                 resolvedType = MessageTypeEnum.VIDEO;
                 if (!attachmentMimeType) attachmentMimeType = 'video/mp4';
               }
-            } else if (/\.(png|jpe?g|gif|webp|bmp|tiff?)(\?|$)/i.test(urlLower)) {
-              resolvedType = /sticker|stickers/.test(urlLower) || /\.webp(\?|$)/i.test(urlLower)
-                ? MessageTypeEnum.STICKER
-                : MessageTypeEnum.IMAGE;
+            } else if (
+              /\.(png|jpe?g|gif|webp|bmp|tiff?)(\?|$)/i.test(urlLower)
+            ) {
+              resolvedType =
+                /sticker|stickers/.test(urlLower) ||
+                /\.webp(\?|$)/i.test(urlLower)
+                  ? MessageTypeEnum.STICKER
+                  : MessageTypeEnum.IMAGE;
               if (!attachmentMimeType) {
-                if (/\.png(\?|$)/i.test(urlLower)) attachmentMimeType = 'image/png';
-                else if (/\.webp(\?|$)/i.test(urlLower)) attachmentMimeType = 'image/webp';
+                if (/\.png(\?|$)/i.test(urlLower))
+                  attachmentMimeType = 'image/png';
+                else if (/\.webp(\?|$)/i.test(urlLower))
+                  attachmentMimeType = 'image/webp';
                 else attachmentMimeType = 'image/jpeg';
               }
             }
           }
         }
-        
+
         this.logger.log('[INSTAGRAM RECEIVE] Type Resolution:', {
           reportedType,
           resolvedType,
@@ -620,7 +708,8 @@ export class InstagramService {
           messageId: message.message.mid,
           isEcho,
           counterpartId,
-          hasText: message.message.text && message.message.text.trim().length > 0,
+          hasText:
+            message.message.text && message.message.text.trim().length > 0,
           hasAttachment: !!firstAttachment,
         });
 
@@ -631,15 +720,30 @@ export class InstagramService {
           messageId: message.message.mid,
         });
 
-        this.logger.log('[INSTAGRAM RECEIVE] Final resolved type:', resolvedType);
+        this.logger.log(
+          '[INSTAGRAM RECEIVE] Final resolved type:',
+          resolvedType,
+        );
 
         if (!attachmentUrl) {
-          const mediaSource = InstagramMessageOriginUtil.extractMediaSource(message.message, messageOrigin);
-          
-          if (mediaSource.source === 'story' || mediaSource.source === 'referral_ad') {
+          const mediaSource = InstagramMessageOriginUtil.extractMediaSource(
+            message.message,
+            messageOrigin,
+          );
+
+          if (
+            mediaSource.source === 'story' ||
+            mediaSource.source === 'referral_ad'
+          ) {
             attachmentUrl = mediaSource.url;
-          } else if (mediaSource.source === 'api_fetch' && mediaSource.mediaId) {
-            const mediaUrl = await this.getMediaUrl(mediaSource.mediaId, storeAuth.token);
+          } else if (
+            mediaSource.source === 'api_fetch' &&
+            mediaSource.mediaId
+          ) {
+            const mediaUrl = await this.getMediaUrl(
+              mediaSource.mediaId,
+              storeAuth.token,
+            );
             if (mediaUrl) {
               attachmentUrl = mediaUrl;
             }
@@ -655,27 +759,31 @@ export class InstagramService {
           }
         }
 
-        const hasText = message.message.text && message.message.text.trim().length > 0;
+        const hasText =
+          message.message.text && message.message.text.trim().length > 0;
         const hasAttachment = attachmentUrl && attachmentUrl.trim().length > 0;
 
         if (hasText && hasAttachment) {
-          const combinedMessage: ChatOutgoingMessageDto = {
+          const combinedMessage: ProviderMessageEvent = {
             storeId: storeAuth.storeId,
-            idMensagem: message.message.mid,
-            idDestinatarioApiExterna: counterpartId,
-            mensagem: message.message.text,
-            anexoMensagem: attachmentUrl,
-            tipoAnexo: attachmentMimeType,
-            mensagemReferencia: replyToMessageId,
-            canal: IntegrationsEnum.INSTAGRAM,
+            messageId: message.message.mid,
+            externalContactId: counterpartId,
+            text: message.message.text,
+            attachmentUrl: attachmentUrl,
+            attachmentType: attachmentMimeType,
+            quotedMessageId: replyToMessageId,
+            channel: IntegrationsEnum.INSTAGRAM,
             timestamp: new Date(message.timestamp + 1),
-            metadados: {
-              nome: name,
+            metadata: {
+              name: name,
+              externalAdId:
+                message.message.referral?.ad_id ||
+                (message as any).referral?.ad_id,
               username: username || undefined,
-              urlAvatar: profile_pic || undefined,
-              origemMensagem: messageOrigin.origin,
-              detalhesOrigem: JSON.stringify({
-                descricao: originDescription,
+              avatarUrl: profile_pic || undefined,
+              source: messageOrigin.origin,
+              sourceDetails: JSON.stringify({
+                description: originDescription,
                 storyId: messageOrigin.storyId,
                 storyUrl: messageOrigin.storyUrl,
                 postId: messageOrigin.postId,
@@ -684,40 +792,40 @@ export class InstagramService {
                 referralRef: messageOrigin.referralRef,
                 referralType: messageOrigin.referralType,
               }),
-              isContentReply: InstagramMessageOriginUtil.isContentReply(messageOrigin),
-              isFromReferral: InstagramMessageOriginUtil.isFromReferral(messageOrigin),
+              isContentReply:
+                InstagramMessageOriginUtil.isContentReply(messageOrigin),
+              isFromReferral:
+                InstagramMessageOriginUtil.isFromReferral(messageOrigin),
             },
-            enviadaLoja: isEcho,
-            tipo: resolvedType,
+            sentByStore: isEcho,
+            type: resolvedType,
           };
 
           if (isEcho) {
-            this.eventEmitter.emit('integration.success', {
-              storeId: storeAuth.storeId,
-              plataforma: IntegrationsEnum.INSTAGRAM,
-              idMensagemExterna: message.message.mid
-            });
           }
-          
-          this.eventEmitter.emit('message.receive', combinedMessage);
+
+          await this.eventEmitter.emitAsync('message.receive', combinedMessage);
         } else {
-          const instagramMessage: ChatOutgoingMessageDto = {
+          const instagramMessage: ProviderMessageEvent = {
             storeId: storeAuth.storeId,
-            idMensagem: message.message.mid,
-            idDestinatarioApiExterna: counterpartId,
-            mensagem: message.message.text,
-            anexoMensagem: attachmentUrl,
-            tipoAnexo: attachmentMimeType,
-            mensagemReferencia: replyToMessageId,
-            canal: IntegrationsEnum.INSTAGRAM,
+            messageId: message.message.mid,
+            externalContactId: counterpartId,
+            text: message.message.text,
+            attachmentUrl: attachmentUrl,
+            attachmentType: attachmentMimeType,
+            quotedMessageId: replyToMessageId,
+            channel: IntegrationsEnum.INSTAGRAM,
             timestamp: new Date(message.timestamp),
-            metadados: {
-              nome: name,
+            metadata: {
+              name: name,
+              externalAdId:
+                message.message.referral?.ad_id ||
+                (message as any).referral?.ad_id,
               username: username || undefined,
-              urlAvatar: profile_pic || undefined,
-              origemMensagem: messageOrigin.origin,
-              detalhesOrigem: JSON.stringify({
-                descricao: originDescription,
+              avatarUrl: profile_pic || undefined,
+              source: messageOrigin.origin,
+              sourceDetails: JSON.stringify({
+                description: originDescription,
                 storyId: messageOrigin.storyId,
                 storyUrl: messageOrigin.storyUrl,
                 postId: messageOrigin.postId,
@@ -726,22 +834,22 @@ export class InstagramService {
                 referralRef: messageOrigin.referralRef,
                 referralType: messageOrigin.referralType,
               }),
-              isContentReply: InstagramMessageOriginUtil.isContentReply(messageOrigin),
-              isFromReferral: InstagramMessageOriginUtil.isFromReferral(messageOrigin),
+              isContentReply:
+                InstagramMessageOriginUtil.isContentReply(messageOrigin),
+              isFromReferral:
+                InstagramMessageOriginUtil.isFromReferral(messageOrigin),
             },
-            enviadaLoja: isEcho,
-            tipo: resolvedType,
+            sentByStore: isEcho,
+            type: resolvedType,
           };
 
           if (isEcho) {
-            this.eventEmitter.emit('integration.success', {
-              storeId: storeAuth.storeId,
-              plataforma: IntegrationsEnum.INSTAGRAM,
-              idMensagemExterna: message.message.mid
-            });
           }
 
-          this.eventEmitter.emit('message.receive', instagramMessage);
+          await this.eventEmitter.emitAsync(
+            'message.receive',
+            instagramMessage,
+          );
         }
       }
     }
@@ -750,11 +858,19 @@ export class InstagramService {
   /**
    * Send message to Instagram
    */
-  async sendMessage({ storeId: storeId, destinatario: recipient, mensagem: messageText, anexoMensagem: messageAttachment, tipoAnexo, tipo, mensagemReferencia }: ChatIncomingMessageDto): Promise<string> {
+  async sendMessage({
+    storeId: storeId,
+    recipient: recipient,
+    text: messageText,
+    attachmentUrl: messageAttachment,
+    attachmentType: requestedAttachmentType,
+    type,
+    quotedMessageId,
+  }: SendMessageDto): Promise<string> {
     await this.rateLimit.checkAppVolumeLimit();
 
-    const type = messageAttachment ? 'media' : 'text';
-    await this.rateLimit.checkInstagramRateLimits(storeId, type);
+    const rateLimitType = messageAttachment ? 'media' : 'text';
+    await this.rateLimit.checkInstagramRateLimits(storeId, rateLimitType);
 
     const store = await this.findAuthenticatedStoreById(storeId);
 
@@ -762,28 +878,41 @@ export class InstagramService {
       const pageToken = store.token!;
       const igId = store.instagramGlobalId!;
 
-      if (tipo === 'reaction' && mensagemReferencia) {
-        return await this.sendReaction(igId, pageToken, recipient, mensagemReferencia, messageText);
+      if (type === 'reaction' && quotedMessageId) {
+        return await this.sendReaction(
+          igId,
+          pageToken,
+          recipient,
+          quotedMessageId,
+          messageText,
+        );
       }
 
       if (messageText && messageText.length > 1000) {
-        throw new ErrorResponse('Message text must be 1000 characters or less', 400);
+        throw new ErrorResponse(
+          'Message text must be 1000 characters or less',
+          400,
+        );
       }
 
       let payload: any;
       if (messageAttachment) {
-        const lower = (tipoAnexo || '').toLowerCase();
+        const lower = (requestedAttachmentType || '').toLowerCase();
         const urlNoQuery = String(messageAttachment).split('?')[0];
-        const ext = (urlNoQuery.includes('.') ? urlNoQuery.substring(urlNoQuery.lastIndexOf('.') + 1) : '').toLowerCase();
-        
+        const ext = (
+          urlNoQuery.includes('.')
+            ? urlNoQuery.substring(urlNoQuery.lastIndexOf('.') + 1)
+            : ''
+        ).toLowerCase();
+
         const isAudioByMime = lower.startsWith('audio');
         const isVideoByMime = lower.startsWith('video');
         const isImageByMime = lower.startsWith('image');
-        
+
         const isAudioByExt = /(m4a|aac|wav)/i.test(ext);
         const isVideoByExt = /(mov|avi|webm|ogg)/i.test(ext);
         const isImageByExt = /(png|jpeg|jpg|gif|webp)/i.test(ext);
-        
+
         let attachmentType: string;
         if (isImageByMime || isImageByExt) {
           attachmentType = 'image';
@@ -800,7 +929,7 @@ export class InstagramService {
         }
 
         this.logger.log('[INSTAGRAM SEND] Attachment Analysis:', {
-          mimeType: tipoAnexo,
+          mimeType: attachmentType,
           extension: ext,
           url: messageAttachment,
           isAudioByMime,
@@ -812,12 +941,12 @@ export class InstagramService {
           finalType: attachmentType,
         });
 
-        payload = { 
-          attachment: { 
-            type: attachmentType, 
+        payload = {
+          attachment: {
+            type: attachmentType,
             payload: { url: messageAttachment },
-            is_reusable: true
-          }
+            is_reusable: true,
+          },
         };
       } else {
         payload = { text: messageText };
@@ -825,20 +954,16 @@ export class InstagramService {
 
       const requestBody: any = {
         recipient: { id: recipient },
-        message: payload
+        message: payload,
       };
 
       const { data: response } = await axios.post<{
         message_id?: string;
         id?: string;
-      }>(
-        `${this.instagramGraphUrl}/${igId}/messages`,
-        requestBody,
-        {
-          headers: { Authorization: `Bearer ${pageToken}` },
-          timeout: 30000,
-        },
-      );
+      }>(`${this.instagramGraphUrl}/${igId}/messages`, requestBody, {
+        headers: { Authorization: `Bearer ${pageToken}` },
+        timeout: 30000,
+      });
 
       const externalMessageId = response.message_id || response.id || 'success';
 
@@ -847,15 +972,10 @@ export class InstagramService {
         recipient,
         externalMessageId,
         hasAttachment: !!messageAttachment,
-        messageType: tipo,
+        messageType: type,
       });
 
       if (externalMessageId && externalMessageId !== 'success') {
-        this.eventEmitter.emit('integration.success', {
-          storeId: storeId,
-          plataforma: IntegrationsEnum.INSTAGRAM,
-          idMensagemExterna: externalMessageId
-        });
       }
 
       return externalMessageId;
@@ -872,41 +992,69 @@ export class InstagramService {
           data: axiosError.response?.data,
           code: axiosError.code,
           message: axiosError.message,
-        }
+        },
       });
 
       if (axiosError.response?.status === 400) {
         const errorData = axiosError.response.data;
         if (errorData?.error?.code === 10) {
-          throw new ErrorResponse('Instagram user not found or conversation not available', 500);
+          throw new ErrorResponse(
+            'Instagram user not found or conversation not available',
+            500,
+          );
         }
         if (errorData?.error?.code === 200) {
-          throw new ErrorResponse('Instagram permissions error - token may be invalid', 500);
+          throw new ErrorResponse(
+            'Instagram permissions error - token may be invalid',
+            500,
+          );
         }
-        throw new ErrorResponse(`Instagram API error: ${errorData?.error?.message || 'Bad request'}`, 500);
+        throw new ErrorResponse(
+          `Instagram API error: ${errorData?.error?.message || 'Bad request'}`,
+          500,
+        );
       }
 
       if (axiosError.response?.status === 401) {
-        throw new ErrorResponse('Instagram token is invalid or expired. Please reconnect your Instagram account.', 401);
+        throw new ErrorResponse(
+          'Instagram token is invalid or expired. Please reconnect your Instagram account.',
+          401,
+        );
       }
 
       if (axiosError.response?.status === 403) {
-        throw new ErrorResponse('Instagram API access forbidden. Check your app permissions.', 500);
+        throw new ErrorResponse(
+          'Instagram API access forbidden. Check your app permissions.',
+          500,
+        );
       }
 
       if (axiosError.response?.status >= 500) {
-        throw new ErrorResponse(`Instagram service temporarily unavailable (${axiosError.response.status}). Please try again later.`, 500);
+        throw new ErrorResponse(
+          `Instagram service temporarily unavailable (${axiosError.response.status}). Please try again later.`,
+          500,
+        );
       }
 
       if (axiosError.code === 'ECONNRESET' || axiosError.code === 'ETIMEDOUT') {
-        throw new ErrorResponse('Connection timeout while sending Instagram message. Please try again.', 500);
+        throw new ErrorResponse(
+          'Connection timeout while sending Instagram message. Please try again.',
+          500,
+        );
       }
 
-      throw new ErrorResponse(`Error sending Instagram message: ${axiosError.message}`, 500);
+      throw new ErrorResponse(
+        `Error sending Instagram message: ${axiosError.message}`,
+        500,
+      );
     }
   }
 
-  async sendPrivateReply(storeId: string, commentId: string, message: string): Promise<string> {
+  async sendPrivateReply(
+    storeId: string,
+    commentId: string,
+    message: string,
+  ): Promise<string> {
     await this.rateLimit.checkAppVolumeLimit();
     await this.rateLimit.checkInstagramRateLimits(storeId, 'reply');
 
@@ -921,7 +1069,10 @@ export class InstagramService {
 
       return 'Private reply sent successfully!';
     } catch (error) {
-      throw new ErrorResponse(`Error sending private reply: ${error?.message}`, 500);
+      throw new ErrorResponse(
+        `Error sending private reply: ${error?.message}`,
+        500,
+      );
     }
   }
 
@@ -944,7 +1095,10 @@ export class InstagramService {
     }
 
     try {
-      const { data } = await axios.get<InstagramUserResponse>(`${this.instagramGraphUrl}/me`, { params: { fields: 'user_id', access_token: store.token } });
+      const { data } = await axios.get<InstagramUserResponse>(
+        `${this.instagramGraphUrl}/me`,
+        { params: { fields: 'user_id', access_token: store.token } },
+      );
 
       if (!data?.user_id || data?.user_id !== store.instagramGlobalId) {
         healthCheckObject.status = IntegrationsStatusEnum.ERROR;
@@ -1012,9 +1166,14 @@ export class InstagramService {
       throw new ErrorResponse('Error validating payload.', 401);
     }
 
-    const store = await this.prismaService.instagramAuthData.findUnique({ where: { instagramGlobalId: data.user_id } });
+    const store = await this.prismaService.instagramAuthData.findUnique({
+      where: { instagramGlobalId: data.user_id },
+    });
     if (!store) {
-      const alreadyDeletedData = await this.prismaService.requestDeletionData.findFirst({ where: { externalUserId: data.user_id } });
+      const alreadyDeletedData =
+        await this.prismaService.requestDeletionData.findFirst({
+          where: { externalUserId: data.user_id },
+        });
 
       if (alreadyDeletedData) {
         return {
@@ -1079,7 +1238,9 @@ export class InstagramService {
       });
 
       if (!store?.token || !store.instagramGlobalId) {
-        this.logger.error(`Instagram integration not configured for store ${storeId}`);
+        this.logger.error(
+          `Instagram integration not configured for store ${storeId}`,
+        );
         return false;
       }
 
@@ -1088,7 +1249,10 @@ export class InstagramService {
           await this.refreshToken(storeId);
           return true;
         } catch (error) {
-          this.logger.error(`Failed to refresh Instagram token for store ${storeId}:`, error.message);
+          this.logger.error(
+            `Failed to refresh Instagram token for store ${storeId}:`,
+            error.message,
+          );
           return false;
         }
       }
@@ -1104,17 +1268,26 @@ export class InstagramService {
         return true;
       } catch (error) {
         const axiosError = error as any;
-        this.logger.error(`Instagram connection test failed for store ${storeId}:`, {
-          status: axiosError.response?.status,
-          message: axiosError.message,
-        });
+        this.logger.error(
+          `Instagram connection test failed for store ${storeId}:`,
+          {
+            status: axiosError.response?.status,
+            message: axiosError.message,
+          },
+        );
 
-        if (axiosError.response?.status === 401 || axiosError.response?.status === 400) {
+        if (
+          axiosError.response?.status === 401 ||
+          axiosError.response?.status === 400
+        ) {
           try {
             await this.refreshToken(storeId);
             return true;
           } catch (refreshError) {
-            this.logger.error(`Failed to refresh Instagram token for store ${storeId}:`, refreshError.message);
+            this.logger.error(
+              `Failed to refresh Instagram token for store ${storeId}:`,
+              refreshError.message,
+            );
             return false;
           }
         }
@@ -1122,7 +1295,10 @@ export class InstagramService {
         return false;
       }
     } catch (error) {
-      this.logger.error(`Error checking Instagram connection health for store ${storeId}:`, error.message);
+      this.logger.error(
+        `Error checking Instagram connection health for store ${storeId}:`,
+        error.message,
+      );
       return false;
     }
   }
@@ -1136,12 +1312,12 @@ export class InstagramService {
   ): Promise<string> {
     try {
       let cleanReaction = reaction || 'love';
-      
+
       if (cleanReaction.includes(':')) {
         const parts = cleanReaction.split(':');
         cleanReaction = parts[parts.length - 1].trim();
       }
-      
+
       cleanReaction = cleanReaction.replace(/\n/g, '').trim();
 
       this.logger.log('[INSTAGRAM REACTION] Sending reaction:', {
@@ -1162,14 +1338,10 @@ export class InstagramService {
 
       const { data: response } = await axios.post<{
         recipient_id?: string;
-      }>(
-        `${this.instagramGraphUrl}/${igId}/messages`,
-        requestBody,
-        {
-          headers: { Authorization: `Bearer ${pageToken}` },
-          timeout: 30000,
-        },
-      );
+      }>(`${this.instagramGraphUrl}/${igId}/messages`, requestBody, {
+        headers: { Authorization: `Bearer ${pageToken}` },
+        timeout: 30000,
+      });
 
       this.logger.log('[INSTAGRAM REACTION] Reaction sent successfully:', {
         recipient,
@@ -1178,7 +1350,7 @@ export class InstagramService {
         recipientId: response.recipient_id,
       });
 
-      return 'Reaction sent successfully!';
+      return null;
     } catch (error) {
       const axiosError = error as any;
 
@@ -1192,10 +1364,13 @@ export class InstagramService {
           data: axiosError.response?.data,
           code: axiosError.code,
           message: axiosError.message,
-        }
+        },
       });
 
-      const errorMessage = axiosError.response?.data?.error?.message || axiosError.message || 'Failed to send reaction';
+      const errorMessage =
+        axiosError.response?.data?.error?.message ||
+        axiosError.message ||
+        'Failed to send reaction';
       throw new ErrorResponse(errorMessage, axiosError.response?.status || 500);
     }
   }
@@ -1230,11 +1405,17 @@ export class InstagramService {
           timeout: 30000,
         },
       );
-      return 'Reaction removed successfully!';
+      return null;
     } catch (error) {
       const axiosError = error as any;
-      this.logger.error('Instagram remove reaction error:', axiosError.response?.data);
-      const errorMessage = axiosError.response?.data?.error?.message || axiosError.message || 'Failed to remove reaction';
+      this.logger.error(
+        'Instagram remove reaction error:',
+        axiosError.response?.data,
+      );
+      const errorMessage =
+        axiosError.response?.data?.error?.message ||
+        axiosError.message ||
+        'Failed to remove reaction';
       throw new ErrorResponse(errorMessage, axiosError.response?.status || 500);
     }
   }
