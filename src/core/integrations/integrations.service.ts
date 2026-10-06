@@ -135,13 +135,7 @@ export class IntegrationsService {
       }
     }
 
-    return results.map((result) => ({
-      ...result,
-      status:
-        result.status === IntegrationsStatusEnum.NOT_CONFIGURED
-          ? IntegrationsStatusEnum.ERROR
-          : result.status,
-    }));
+    return results;
   }
 
   async clearIntegrationCache(
