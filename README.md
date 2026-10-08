@@ -1,102 +1,134 @@
-# AutoPilot integrations gateway
+# AutoPilot — Microservice de Integrações
 
-NestJS gateway for Evolution WhatsApp, Meta Cloud WhatsApp, Instagram, Facebook and OLX. The CRM calls only this service; provider sessions live in Evolution, not in the gateway filesystem.
+Gateway de comunicação do AutoPilot, CRM para lojas e concessionárias de veículos. Este serviço conecta o CRM a WhatsApp, Instagram, Facebook e OLX, normaliza os eventos recebidos e controla o envio e a entrega das mensagens.
 
-## First run
+O microservice não contém o pipeline comercial nem executa o copiloto de IA. Essas responsabilidades pertencem ao backend principal; o frontend apresenta os fluxos aos usuários.
 
-Use Node 22 and pnpm 10.25.0. Copy `.env.example` to `.env`, set independent microservice, Evolution API and Evolution webhook secrets, and configure the providers you will connect. `MICROSERVICE_TOKEN` must match the backend. Never expose it to a browser.
+## Arquitetura e funcionalidades
 
-```sh
+| Projeto                  | Responsabilidade                             | Porta local |
+| ------------------------ | -------------------------------------------- | ----------- |
+| `autopilot-frontend`     | Interface das lojas e backoffice             | 3001        |
+| `autopilot-backend`      | CRM, autenticação, regras comerciais e IA    | 3003        |
+| `autopilot-microservice` | Provedores, callbacks e entrega de mensagens | 3005        |
+
+Stack: NestJS 10, TypeScript, Prisma 5, PostgreSQL, Redis, Socket.io e Firebase para mídia. O banco `autopilot_micro` é separado do banco comercial `autopilot`; a Evolution mantém seu próprio banco e volume de instâncias.
+
+Funcionalidades implementadas:
+
+- WhatsApp via Evolution v2.3.7: conexão por QR Code, estado da instância, verificação de número e envio/recebimento.
+- WhatsApp oficial pela Meta: configuração, templates, tokens criptografados e callbacks.
+- Instagram, Facebook e OLX: integração dos respectivos canais, autorização e processamento de eventos.
+- Normalização, correlação de IDs externos, processamento de anexos e atualização de status de entrega.
+- Fila durável para eventos recebidos, deduplicação, retentativas e recuperação após reinício.
+- Envio idempotente e inspeção de resultados incertos.
+
+As funcionalidades de cada canal dependem das contas, permissões e formatos aceitos pelo provedor. OLX suporta texto; recursos como localização e contatos em canais sociais podem ser representados por texto. As sessões do WhatsApp pertencem à Evolution, não ao filesystem do gateway.
+
+## Desenvolvimento integrado com Colima
+
+Use Node.js 22 e pnpm 10.25.0. Os engines do projeto aceitam Node 22–24. Os exemplos assumem os três repositórios em pastas irmãs.
+
+Na primeira configuração:
+
+```bash
 cp .env.example .env
 pnpm install --frozen-lockfile
-pnpm db:generate
-docker compose up --build -d
 ```
 
-Compose creates `autopilot_micro` and `evolution` on the same PostgreSQL server, runs `prisma db push` against the empty microservice database and starts Evolution with its own database initialization. No migration files are used. Initialization SQL runs only on a fresh PostgreSQL volume. Existing volumes require creating the Evolution database explicitly.
+Preserve o `.env` se já estiver configurado. Inicie a infraestrutura compartilhada pelo `docker-compose.local.yml` do backend, conforme o [guia local](../autopilot-backend/docker/local/README.md). Ele sobe PostgreSQL, Redis, Evolution e Ollama; as três aplicações rodam no host.
 
-For host development, start only PostgreSQL, Redis and Evolution, initialize the schema, set `AUTOPILOT_URL=http://localhost:3003`, and run the gateway:
+Em um terminal deste projeto:
 
-```sh
-docker compose up -d postgres redis evolution-api
+```bash
+set -a
+source ../autopilot-backend/.env.local
+set +a
+export DATABASE_URL='postgresql://autopilot:autopilot@127.0.0.1:55432/autopilot_micro?schema=public'
+export REDIS_HOST=127.0.0.1 REDIS_PORT=56379 REDIS_USERNAME='' REDIS_PASSWORD=''
+export PORT=3005 AUTOPILOT_URL=http://localhost:3003 APP_BASE_URL=http://localhost:3005
+export FRONT_URL=http://localhost:3001 EVOLUTION_API_URL=http://localhost:8080
+export EVOLUTION_WEBHOOK_URL=http://host.docker.internal:3005/whatsapp/webhook/evolution
+pnpm db:generate
 pnpm db:push
 pnpm dev
 ```
 
-Evolution requires a reachable callback: set `APP_BASE_URL` to the host address reachable from its container when running the gateway on the host. Compose supplies an internal `EVOLUTION_WEBHOOK_URL` independently. Set `APP_BASE_URL` to a public HTTPS callback URL for Meta/OLX; their OAuth/webhook URLs stay separate from the internal Evolution callback.
+Este projeto sincroniza o esquema com `prisma db push`; não usa arquivos de migração. Confira `DATABASE_URL` antes de executar. O backend principal aplica suas próprias migrações ao banco `autopilot`.
 
-Firebase credentials can come from `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`, or a read-only JSON mounted at `FIREBASE_CREDENTIALS_PATH`. Set `FIREBASE_STORAGE_BUCKET` when the bucket differs from the project default. Missing storage configuration does not prevent text-only startup, but media processing remains pending until storage is configured. Official WhatsApp requires a 32-byte base64 `ENCRYPTION_KEY` and system FFmpeg (included in the container).
+O `.env` é carregado pelo serviço; o `.env.local` compartilhado precisa ser carregado explicitamente pelo terminal. O callback de Evolution acima permite que seu container alcance o microservice no host. Meta e OLX precisam de URLs públicas HTTPS acessíveis externamente; `localhost` não substitui esse callback público.
 
-## Internal API
+## Configuração dos provedores
 
-Internal operations require `x-micro-token: <MICROSERVICE_TOKEN>`; `x-api-key` is also accepted. `/docs` documents the HTTP endpoints. Responses use `{ message, statusCode, data }`; webhook verification responses follow provider protocols.
+| Variável                                           | Uso                                                         |
+| -------------------------------------------------- | ----------------------------------------------------------- |
+| `MICROSERVICE_TOKEN`                               | Segredo das chamadas internas; deve coincidir com o backend |
+| `AUTOPILOT_URL`                                    | Origem do backend para entrega HTTP dos eventos             |
+| `APP_BASE_URL`                                     | URL do gateway usada pelos fluxos de callback               |
+| `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`           | Acesso à Evolution                                          |
+| `EVOLUTION_WEBHOOK_TOKEN`, `EVOLUTION_WEBHOOK_URL` | Autenticação e destino dos eventos Evolution                |
+| `ENCRYPTION_KEY`                                   | Chave de 32 bytes em base64 para tokens do WhatsApp oficial |
+| `META_*`, `INSTAGRAM_*`, `OLX_*`                   | Configuração dos respectivos provedores                     |
 
-| Method | Path                                          | Purpose                                                |
-| ------ | --------------------------------------------- | ------------------------------------------------------ |
-| POST   | `/communication/messages`                     | Idempotent provider send                               |
-| POST   | `/communication/whatsapp/verify-number`       | Evolution number lookup                                |
-| GET    | `/integrations/whatsapp/qrcode/:storeId`      | Create/reuse instance and return QR                    |
-| GET    | `/integrations/:storeId/status`               | Consolidated provider status                           |
-| DELETE | `/integrations/:storeId`                      | Disconnect and remove configuration                    |
-| POST   | `/integrations/:storeId/:channel/clear-cache` | Clear provider cache/circuit breaker                   |
-| GET    | `/communication/messages-with-error`          | Inspect pending/failed delivery jobs; optional storeId |
-| POST   | `/communication/events/:id/retry`             | Requeue a pending/failed job                           |
-| GET    | `/health`                                     | Process liveness                                       |
-| GET    | `/health/ready`                               | PostgreSQL and Redis readiness                         |
+Use segredos diferentes para a API Evolution e seu webhook. Nunca envie `MICROSERVICE_TOKEN` ao navegador.
 
-Provider configuration, OAuth callbacks, templates, refresh, per-channel removal and cache inspection remain available. Routes no longer include the obsolete `/store` segment in QR requests.
+Firebase aceita variáveis `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` ou um JSON em `FIREBASE_CREDENTIALS_PATH`. Configure `FIREBASE_STORAGE_BUCKET` quando necessário. Sem armazenamento configurado, o serviço pode operar com texto, mas o processamento de mídia permanece pendente. FFmpeg é usado nos fluxos de mídia e está incluído na imagem do projeto.
 
-Outbound requests require UUID `storeId` and `messageId`, `recipient`, and `channel` (`whatsapp`, `instagram`, `facebook`, `olx`). Text, attachment, coordinates, contacts or a reaction supply content. Optional properties may be null. WhatsApp `official` selects Meta; `baileys`, `evolution` and `unofficial` select Evolution. Without a selector, an existing official configuration takes precedence. Unsupported channel features return an explicit error; OLX supports text, while locations/contacts on social channels use a textual representation.
+## API interna e saúde
 
-```json
-{
-  "storeId": "2e18bdb9-512d-4415-99e5-daa9b446ab10",
-  "messageId": "748ac386-857a-4889-9759-110b66a7c9e7",
-  "recipient": "5511999999999",
-  "channel": "whatsapp",
-  "wppApiType": "baileys",
-  "text": "Hello"
-}
-```
+As chamadas internas usam `x-micro-token`; o alias `x-api-key` também é aceito. As respostas usuais seguem `{ message, statusCode, data }`; a verificação de webhooks segue os protocolos de cada provedor. A documentação fica em `/docs` quando `ENABLE_DOCS` está habilitado.
 
-Successful sends return `data.externalMessageId` and `data.response` with the same provider ID (null when the provider does not return one). Repeating `storeId + messageId` returns the stored result; changing its content returns 409. A timeout after possible acceptance creates an `indeterminate` outbound record. Such requests are never automatically resent. After checking the provider, an authenticated operator can bind confirmed evidence using `POST /communication/messages/:messageId/reconcile` with `{ storeId, externalMessageId }`. This endpoint only accepts indeterminate sends or sending records abandoned for over three minutes. It does not infer a match or resend a message. Inspect uncertain records at `GET /communication/outbound-with-error` (optional storeId). Inspect the provider before attempting any new send; an abandoned `sending` record also blocks resend after restart.
+| Método | Rota                                           | Finalidade                               |
+| ------ | ---------------------------------------------- | ---------------------------------------- |
+| GET    | `/health`                                      | Saúde do processo                        |
+| GET    | `/health/ready`                                | Disponibilidade de PostgreSQL e Redis    |
+| POST   | `/communication/messages`                      | Envio idempotente para o provedor        |
+| POST   | `/communication/whatsapp/verify-number`        | Verificação de número na Evolution       |
+| GET    | `/integrations/whatsapp/qrcode/:storeId`       | Conectar instância e obter QR Code       |
+| GET    | `/integrations/:storeId/status`                | Estado dos canais da loja                |
+| GET    | `/communication/messages-with-error`           | Inspeção de eventos pendentes/falhos     |
+| POST   | `/communication/events/:id/retry`              | Reagendamento de evento                  |
+| GET    | `/communication/outbound-with-error`           | Inspeção de envios com resultado incerto |
+| POST   | `/communication/messages/:messageId/reconcile` | Vincular evidência confirmada do envio   |
 
-QR responses contain `data.qrCode.base64`, `data.message` and `data.status` (`connected`, `connecting`, `qr_code_generated`). Evolution sessions and its instance volume remain stateful; only the gateway scales horizontally.
+Um envio identifica `storeId`, `messageId`, `recipient` e `channel`. Repetir a combinação loja/mensagem retorna o resultado armazenado; modificar o conteúdo da mesma tentativa retorna 409. Um timeout depois de possível aceite do provedor gera estado `indeterminate`, que não é reenviado automaticamente. A reconciliação exige verificar o provedor e informar o ID externo confirmado; não dispara outro envio.
 
-## Durable delivery to the CRM
+## Entrega durável ao CRM
 
-Provider callbacks are authenticated and persisted in `delivery_jobs` before success. Workers run every five seconds and claim jobs with PostgreSQL leases and `SKIP LOCKED`; expired claims are recovered after restart. Normalization/media work runs after persistence. Group and broadcast WhatsApp messages are ignored.
+Callbacks são autenticados e persistidos em `delivery_jobs` antes da confirmação. Workers usam leases e `SKIP LOCKED` no PostgreSQL, recuperam claims expirados e processam normalização/mídia após a persistência. Falhas transitórias têm retentativa exponencial; falhas permanentes ficam disponíveis para inspeção.
 
-The backend may connect to the gateway namespace `/crm` with Socket.io, websocket transport and `auth.token` or `x-micro-token`. Set backend `MICROSERVICE_WS_URL=http://localhost:3005/crm`. The gateway emits `message:incoming`, `lead:incoming` and `message:ack`. One connected CRM socket receives each attempt. No Redis Socket.io adapter is needed: a worker without a local socket uses HTTP.
+O backend pode conectar ao namespace Socket.io `/crm`, autenticado pelo token compartilhado. Eventos incluem `message:incoming`, `lead:incoming` e `message:ack`. Sem socket disponível ou confirmação positiva, o worker usa HTTP nas rotas `/chat/messages/incoming`, `/leads/incoming` e `/chat/messages/ack` do backend.
 
-Events are persisted before emission. A matching positive callback within five seconds completes delivery. Missing socket, rejection or timeout uses HTTP: `/chat/messages/incoming`, `/leads/incoming`, `/chat/messages/ack`. Messages/leads require HTTP 202 with `data.accepted=true` and matching eventId. The same IDs are reused across transports and retries; the CRM deduplicates them. ACKs waiting for an outbound correlation remain pending.
+IDs de evento são preservados entre transportes e retentativas para permitir deduplicação. Anexos são processados e enviados ao armazenamento antes de serem entregues ao CRM. Mensagens WhatsApp de grupos e broadcasts são ignoradas.
 
-Normalized events contain only the fields accepted by the CRM: `storeId`, `eventId`, `externalMessageId`, `externalContactId`, `channel`, ISO `timestamp`, optional `text`, `attachmentUrl`, `attachmentType`, `quotedMessageId`, `name`, `externalAdId`, `sentByStore`. Provider quote IDs are converted to CRM IDs only when a stored correlation exists. Rich ad/source metadata stays in `delivery_jobs.metadata`; sending those extra fields would be rejected by the current backend.
+Detalhes de payloads, confirmações e eventos estão no [contrato de comunicação](../autopilot-backend/docs/COMMUNICATION.md). Registros de entrega e envio guardam as chaves de idempotência e correlação usadas nas retentativas.
 
-Failures use exponential retry capped at five minutes. Permanent 4xx failures are retained for inspection/requeue (408/409/425/429 remain retryable). Delivery jobs retain accepted-event keys, and outbound records retain idempotency/correlation keys; do not truncate these tables while replay or message retries are possible. Provider media is decrypted/downloaded and uploaded to Firebase before delivery. Encrypted WhatsApp attachment URLs are never forwarded as accessible media.
+## Organização e verificação
 
-## Deployment and verification
+Módulos de provedores e comunicação ficam em `src/core/`; configuração, infraestrutura e adapters em `src/base/`; esquema em `prisma/schema.prisma`; fixtures em `test/`; manifests em `k8s/`. Testes Jest ficam junto às implementações em `*.spec.ts`.
 
-Kubernetes manifests use port 3005, Deployment, separate readiness/liveness and HPA (1–3 replicas, CPU target 70%). Provision external PostgreSQL, Redis and Evolution, apply the empty schema with `pnpm db:push`, and supply the `autopilot-micro-env` secret. Replace the example image tag with the built immutable release before deploying. Ingress retains request paths and allows long-lived WebSocket connections.
-
-```sh
+```bash
 pnpm exec prisma validate
 pnpm exec tsc --noEmit
-pnpm test --runInBand
+pnpm exec jest --runInBand
+pnpm lint
+pnpm format:check
 pnpm build
-docker compose --env-file .env.example config --quiet
-docker build -t autopilot-micro:local .
 ```
 
-Real QR scanning, provider media/voice delivery and account authorization require external accounts and credentials. Measure image size and memory after building/running. The database concurrency suite uses `TEST_DATABASE_URL` pointing to a dedicated empty PostgreSQL database; never point it at an application database.
+Para concorrência e leases, configure `TEST_DATABASE_URL` em um banco dedicado e execute `pnpm test:database`. O smoke test usa containers descartáveis, dois gateways e um stub do CRM; não envia mensagens a contas WhatsApp reais:
 
-The disposable container smoke fixture initializes a fresh database, starts two gateway processes, Evolution v2.3.7 and a CRM acceptance stub. It injects synthetic callbacks; it never sends to a real WhatsApp account. Run the smoke script once per fresh fixture (its stub counters start at zero):
-
-```sh
+```bash
 docker compose -p autopilot-micro-smoke -f test/docker-compose.smoke.yml up --build -d
 node test/runtime-smoke.mjs
-TEST_REDIS_URL=redis://localhost:56389 TEST_DATABASE_URL=postgresql://postgres:test-password@localhost:55439/autopilot_micro_test pnpm test --runInBand
+TEST_REDIS_URL=redis://localhost:56389 TEST_DATABASE_URL=postgresql://postgres:test-password@localhost:55439/autopilot_micro_test pnpm exec jest --runInBand
 docker compose -p autopilot-micro-smoke -f test/docker-compose.smoke.yml down -v
 ```
 
-The fixture binds only to localhost and uses ports 55439, 56389, 56005, 56006 and 56103. Its PostgreSQL data is disposable; never substitute a real database. Wait for gateway readiness and Evolution startup before running the script. Some installations expose Compose as `docker-compose` instead of `docker compose`.
+Aguarde a readiness dos gateways e a inicialização da Evolution. Execute o script uma vez por fixture nova; `down -v` remove os dados dessa fixture. Não substitua o banco de testes por um banco da aplicação.
+
+## Execução em containers
+
+O `docker-compose.yml` deste repositório continua disponível para executar o gateway e sua infraestrutura em uma stack própria. Suas portas de PostgreSQL/Redis são 5433/6380, diferentes do ambiente compartilhado do Colima. Escolha uma stack para o mesmo teste, evitando instâncias duplicadas da Evolution na porta 8080.
+
+Os manifests Kubernetes incluem Deployment, readiness/liveness e HPA. Exigem PostgreSQL, Redis, Evolution, segredos e imagem de release configurados para o ambiente. Consulte [AGENTS.md](AGENTS.md) para contribuir.
