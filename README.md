@@ -1,44 +1,44 @@
-# AutoPilot — Microservice de Integrações
+# AutoPilot — Integrations Microservice
 
-Gateway de comunicação do AutoPilot, CRM para lojas e concessionárias de veículos. Este serviço conecta o CRM a WhatsApp, Instagram, Facebook e OLX, normaliza os eventos recebidos e controla o envio e a entrega das mensagens.
+The communication gateway for AutoPilot, a CRM for vehicle retailers and dealerships. This service connects the CRM to WhatsApp, Instagram, Facebook, and OLX, normalizes incoming events, and manages message sending and delivery.
 
-O microservice não contém o pipeline comercial nem executa o copiloto de IA. Essas responsabilidades pertencem ao backend principal; o frontend apresenta os fluxos aos usuários.
+The microservice does not contain the sales pipeline or run the AI copilot. Those responsibilities belong to the main backend; the frontend presents the workflows to users.
 
-## Arquitetura e funcionalidades
+## Architecture and features
 
-| Projeto                  | Responsabilidade                             | Porta local |
-| ------------------------ | -------------------------------------------- | ----------- |
-| `autopilot-frontend`     | Interface das lojas e backoffice             | 3001        |
-| `autopilot-backend`      | CRM, autenticação, regras comerciais e IA    | 3003        |
-| `autopilot-microservice` | Provedores, callbacks e entrega de mensagens | 3005        |
+| Project                                                                           | Responsibility                              | Local port |
+| --------------------------------------------------------------------------------- | ------------------------------------------- | ---------- |
+| [autopilot-frontend](https://github.com/FabricioHiury/autopilot-frontend)         | Store interface and platform backoffice     | 3001       |
+| [autopilot-backend](https://github.com/FabricioHiury/autopilot-backend)           | CRM, authentication, business rules, and AI | 3003       |
+| [autopilot-microservice](https://github.com/FabricioHiury/autopilot-microservice) | Providers, callbacks, and message delivery  | 3005       |
 
-Stack: NestJS 10, TypeScript, Prisma 5, PostgreSQL, Redis, Socket.io e Firebase para mídia. O banco `autopilot_micro` é separado do banco comercial `autopilot`; a Evolution mantém seu próprio banco e volume de instâncias.
+Stack: NestJS 10, TypeScript, Prisma 5, PostgreSQL, Redis, Socket.io, and Firebase for media. The `autopilot_micro` database is separate from the business database, `autopilot`; Evolution maintains its own database and instance volume.
 
-Funcionalidades implementadas:
+Implemented features:
 
-- WhatsApp via Evolution v2.3.7: conexão por QR Code, estado da instância, verificação de número e envio/recebimento.
-- WhatsApp oficial pela Meta: configuração, templates, tokens criptografados e callbacks.
-- Instagram, Facebook e OLX: integração dos respectivos canais, autorização e processamento de eventos.
-- Normalização, correlação de IDs externos, processamento de anexos e atualização de status de entrega.
-- Fila durável para eventos recebidos, deduplicação, retentativas e recuperação após reinício.
-- Envio idempotente e inspeção de resultados incertos.
+- WhatsApp through Evolution v2.3.7: QR code pairing, instance state, number verification, and message sending/receiving.
+- Official WhatsApp through Meta: configuration, templates, encrypted tokens, and callbacks.
+- Instagram, Facebook, and OLX: channel integrations, authorization, and event processing.
+- Normalization, external ID correlation, attachment processing, and delivery status updates.
+- Durable inbound event queue, deduplication, retries, and recovery after restarts.
+- Idempotent sending and inspection of uncertain outcomes.
 
-As funcionalidades de cada canal dependem das contas, permissões e formatos aceitos pelo provedor. OLX suporta texto; recursos como localização e contatos em canais sociais podem ser representados por texto. As sessões do WhatsApp pertencem à Evolution, não ao filesystem do gateway.
+Each channel's capabilities depend on provider accounts, permissions, and supported formats. OLX supports text; features such as locations and contacts on social channels may be represented as text. WhatsApp sessions belong to Evolution, rather than the gateway filesystem.
 
-## Desenvolvimento integrado com Colima
+## Integrated development with Colima
 
-Use Node.js 22 e pnpm 10.25.0. Os engines do projeto aceitam Node 22–24. Os exemplos assumem os três repositórios em pastas irmãs.
+Use Node.js 22 and pnpm 10.25.0. The project engines support Node 22–24. These examples assume all three repositories are sibling directories.
 
-Na primeira configuração:
+For the initial setup:
 
 ```bash
 cp .env.example .env
 pnpm install --frozen-lockfile
 ```
 
-Preserve o `.env` se já estiver configurado. Inicie a infraestrutura compartilhada pelo `docker-compose.local.yml` do backend, conforme o [guia local](../autopilot-backend/docker/local/README.md). Ele sobe PostgreSQL, Redis, Evolution e Ollama; as três aplicações rodam no host.
+Preserve `.env` if it is already configured. Start the shared infrastructure through the backend's `docker-compose.local.yml`, following the [local guide](https://github.com/FabricioHiury/autopilot-backend/blob/main/docker/local/README.md). It runs PostgreSQL, Redis, Evolution, and Ollama; the three applications run on the host.
 
-Em um terminal deste projeto:
+In a terminal for this project:
 
 ```bash
 set -a
@@ -54,58 +54,58 @@ pnpm db:push
 pnpm dev
 ```
 
-Este projeto sincroniza o esquema com `prisma db push`; não usa arquivos de migração. Confira `DATABASE_URL` antes de executar. O backend principal aplica suas próprias migrações ao banco `autopilot`.
+This project synchronizes its schema with `prisma db push`; it does not use migration files. Inspect `DATABASE_URL` before running it. The main backend applies its own migrations to the `autopilot` database.
 
-O `.env` é carregado pelo serviço; o `.env.local` compartilhado precisa ser carregado explicitamente pelo terminal. O callback de Evolution acima permite que seu container alcance o microservice no host. Meta e OLX precisam de URLs públicas HTTPS acessíveis externamente; `localhost` não substitui esse callback público.
+The service loads `.env`; the terminal must explicitly load the shared `.env.local`. The Evolution callback above lets its container reach the microservice on the host. Meta and OLX require externally reachable public HTTPS URLs; `localhost` cannot replace that public callback.
 
-## Configuração dos provedores
+## Provider configuration
 
-| Variável                                           | Uso                                                         |
-| -------------------------------------------------- | ----------------------------------------------------------- |
-| `MICROSERVICE_TOKEN`                               | Segredo das chamadas internas; deve coincidir com o backend |
-| `AUTOPILOT_URL`                                    | Origem do backend para entrega HTTP dos eventos             |
-| `APP_BASE_URL`                                     | URL do gateway usada pelos fluxos de callback               |
-| `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`           | Acesso à Evolution                                          |
-| `EVOLUTION_WEBHOOK_TOKEN`, `EVOLUTION_WEBHOOK_URL` | Autenticação e destino dos eventos Evolution                |
-| `ENCRYPTION_KEY`                                   | Chave de 32 bytes em base64 para tokens do WhatsApp oficial |
-| `META_*`, `INSTAGRAM_*`, `OLX_*`                   | Configuração dos respectivos provedores                     |
+| Variable                                           | Purpose                                                 |
+| -------------------------------------------------- | ------------------------------------------------------- |
+| `MICROSERVICE_TOKEN`                               | Internal request secret; must match the backend         |
+| `AUTOPILOT_URL`                                    | Backend origin for HTTP event delivery                  |
+| `APP_BASE_URL`                                     | Gateway URL used by callback workflows                  |
+| `EVOLUTION_API_URL`, `EVOLUTION_API_KEY`           | Evolution access                                        |
+| `EVOLUTION_WEBHOOK_TOKEN`, `EVOLUTION_WEBHOOK_URL` | Evolution event authentication and destination          |
+| `ENCRYPTION_KEY`                                   | Base64-encoded 32-byte key for official WhatsApp tokens |
+| `META_*`, `INSTAGRAM_*`, `OLX_*`                   | Respective provider configuration                       |
 
-Use segredos diferentes para a API Evolution e seu webhook. Nunca envie `MICROSERVICE_TOKEN` ao navegador.
+Use different secrets for the Evolution API and its webhook. Never send `MICROSERVICE_TOKEN` to the browser.
 
-Firebase aceita variáveis `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY` ou um JSON em `FIREBASE_CREDENTIALS_PATH`. Configure `FIREBASE_STORAGE_BUCKET` quando necessário. Sem armazenamento configurado, o serviço pode operar com texto, mas o processamento de mídia permanece pendente. FFmpeg é usado nos fluxos de mídia e está incluído na imagem do projeto.
+Firebase accepts `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, and `FIREBASE_PRIVATE_KEY`, or a JSON file at `FIREBASE_CREDENTIALS_PATH`. Configure `FIREBASE_STORAGE_BUCKET` when necessary. Without storage configured, the service can handle text, but media processing remains pending. FFmpeg is used by media workflows and is included in the project image.
 
-## API interna e saúde
+## Internal API and health
 
-As chamadas internas usam `x-micro-token`; o alias `x-api-key` também é aceito. As respostas usuais seguem `{ message, statusCode, data }`; a verificação de webhooks segue os protocolos de cada provedor. A documentação fica em `/docs` quando `ENABLE_DOCS` está habilitado.
+Internal requests use `x-micro-token`; the `x-api-key` alias is also accepted. Standard responses follow `{ message, statusCode, data }`; webhook verification follows each provider's protocol. Documentation is available at `/docs` when `ENABLE_DOCS` is enabled.
 
-| Método | Rota                                           | Finalidade                               |
-| ------ | ---------------------------------------------- | ---------------------------------------- |
-| GET    | `/health`                                      | Saúde do processo                        |
-| GET    | `/health/ready`                                | Disponibilidade de PostgreSQL e Redis    |
-| POST   | `/communication/messages`                      | Envio idempotente para o provedor        |
-| POST   | `/communication/whatsapp/verify-number`        | Verificação de número na Evolution       |
-| GET    | `/integrations/whatsapp/qrcode/:storeId`       | Conectar instância e obter QR Code       |
-| GET    | `/integrations/:storeId/status`                | Estado dos canais da loja                |
-| GET    | `/communication/messages-with-error`           | Inspeção de eventos pendentes/falhos     |
-| POST   | `/communication/events/:id/retry`              | Reagendamento de evento                  |
-| GET    | `/communication/outbound-with-error`           | Inspeção de envios com resultado incerto |
-| POST   | `/communication/messages/:messageId/reconcile` | Vincular evidência confirmada do envio   |
+| Method | Route                                          | Purpose                               |
+| ------ | ---------------------------------------------- | ------------------------------------- |
+| GET    | `/health`                                      | Process health                        |
+| GET    | `/health/ready`                                | PostgreSQL and Redis readiness        |
+| POST   | `/communication/messages`                      | Idempotent provider sending           |
+| POST   | `/communication/whatsapp/verify-number`        | Evolution number verification         |
+| GET    | `/integrations/whatsapp/qrcode/:storeId`       | Connect instance and retrieve QR code |
+| GET    | `/integrations/:storeId/status`                | Store channel states                  |
+| GET    | `/communication/messages-with-error`           | Inspect pending/failed events         |
+| POST   | `/communication/events/:id/retry`              | Reschedule event                      |
+| GET    | `/communication/outbound-with-error`           | Inspect sends with uncertain outcomes |
+| POST   | `/communication/messages/:messageId/reconcile` | Associate confirmed sending evidence  |
 
-Um envio identifica `storeId`, `messageId`, `recipient` e `channel`. Repetir a combinação loja/mensagem retorna o resultado armazenado; modificar o conteúdo da mesma tentativa retorna 409. Um timeout depois de possível aceite do provedor gera estado `indeterminate`, que não é reenviado automaticamente. A reconciliação exige verificar o provedor e informar o ID externo confirmado; não dispara outro envio.
+A send identifies `storeId`, `messageId`, `recipient`, and `channel`. Repeating the store/message combination returns the stored result; changing the content of the same attempt returns 409. A timeout after possible provider acceptance produces an `indeterminate` state, which is not automatically resent. Reconciliation requires checking the provider and supplying the confirmed external ID; it does not trigger another send.
 
-## Entrega durável ao CRM
+## Durable delivery to the CRM
 
-Callbacks são autenticados e persistidos em `delivery_jobs` antes da confirmação. Workers usam leases e `SKIP LOCKED` no PostgreSQL, recuperam claims expirados e processam normalização/mídia após a persistência. Falhas transitórias têm retentativa exponencial; falhas permanentes ficam disponíveis para inspeção.
+Callbacks are authenticated and persisted in `delivery_jobs` before acknowledgment. Workers use leases and PostgreSQL `SKIP LOCKED`, recover expired claims, and process normalization/media after persistence. Transient failures use exponential retries; permanent failures remain available for inspection.
 
-O backend pode conectar ao namespace Socket.io `/crm`, autenticado pelo token compartilhado. Eventos incluem `message:incoming`, `lead:incoming` e `message:ack`. Sem socket disponível ou confirmação positiva, o worker usa HTTP nas rotas `/chat/messages/incoming`, `/leads/incoming` e `/chat/messages/ack` do backend.
+The backend can connect to the Socket.io `/crm` namespace, authenticated by the shared token. Events include `message:incoming`, `lead:incoming`, and `message:ack`. Without an available socket or positive acknowledgment, the worker uses HTTP through the backend routes `/chat/messages/incoming`, `/leads/incoming`, and `/chat/messages/ack`.
 
-IDs de evento são preservados entre transportes e retentativas para permitir deduplicação. Anexos são processados e enviados ao armazenamento antes de serem entregues ao CRM. Mensagens WhatsApp de grupos e broadcasts são ignoradas.
+Event IDs are preserved across transports and retries for deduplication. Attachments are processed and uploaded to storage before delivery to the CRM. WhatsApp group and broadcast messages are ignored.
 
-Detalhes de payloads, confirmações e eventos estão no [contrato de comunicação](../autopilot-backend/docs/COMMUNICATION.md). Registros de entrega e envio guardam as chaves de idempotência e correlação usadas nas retentativas.
+Payload, acknowledgment, and event details are in the [communication contract](https://github.com/FabricioHiury/autopilot-backend/blob/main/docs/COMMUNICATION.md). Delivery and outbound records retain the idempotency and correlation keys used in retries.
 
-## Organização e verificação
+## Organization and verification
 
-Módulos de provedores e comunicação ficam em `src/core/`; configuração, infraestrutura e adapters em `src/base/`; esquema em `prisma/schema.prisma`; fixtures em `test/`; manifests em `k8s/`. Testes Jest ficam junto às implementações em `*.spec.ts`.
+Provider and communication modules are in `src/core/`; configuration, infrastructure, and adapters in `src/base/`; the schema in `prisma/schema.prisma`; fixtures in `test/`; and manifests in `k8s/`. Jest tests live alongside implementations in `*.spec.ts` files.
 
 ```bash
 pnpm exec prisma validate
@@ -116,7 +116,7 @@ pnpm format:check
 pnpm build
 ```
 
-Para concorrência e leases, configure `TEST_DATABASE_URL` em um banco dedicado e execute `pnpm test:database`. O smoke test usa containers descartáveis, dois gateways e um stub do CRM; não envia mensagens a contas WhatsApp reais:
+For concurrency and leases, configure `TEST_DATABASE_URL` with a dedicated database and run `pnpm test:database`. The smoke test uses disposable containers, two gateways, and a CRM stub; it does not send messages to real WhatsApp accounts:
 
 ```bash
 docker compose -p autopilot-micro-smoke -f test/docker-compose.smoke.yml up --build -d
@@ -125,10 +125,10 @@ TEST_REDIS_URL=redis://localhost:56389 TEST_DATABASE_URL=postgresql://postgres:t
 docker compose -p autopilot-micro-smoke -f test/docker-compose.smoke.yml down -v
 ```
 
-Aguarde a readiness dos gateways e a inicialização da Evolution. Execute o script uma vez por fixture nova; `down -v` remove os dados dessa fixture. Não substitua o banco de testes por um banco da aplicação.
+Wait for gateway readiness and Evolution initialization. Run the script once per fresh fixture; `down -v` removes that fixture's data. Never substitute an application database for the test database.
 
-## Execução em containers
+## Running in containers
 
-O `docker-compose.yml` deste repositório continua disponível para executar o gateway e sua infraestrutura em uma stack própria. Suas portas de PostgreSQL/Redis são 5433/6380, diferentes do ambiente compartilhado do Colima. Escolha uma stack para o mesmo teste, evitando instâncias duplicadas da Evolution na porta 8080.
+This repository's `docker-compose.yml` remains available to run the gateway and its infrastructure as a separate stack. PostgreSQL/Redis ports are 5433/6380, different from the shared Colima environment. Choose one stack for a test to avoid duplicate Evolution instances on port 8080.
 
-Os manifests Kubernetes incluem Deployment, readiness/liveness e HPA. Exigem PostgreSQL, Redis, Evolution, segredos e imagem de release configurados para o ambiente. Consulte [AGENTS.md](AGENTS.md) para contribuir.
+The Kubernetes manifests include Deployment, readiness/liveness checks, and HPA. They require PostgreSQL, Redis, Evolution, secrets, and a release image configured for the environment. See [AGENTS.md](AGENTS.md) to contribute.
